@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #161512;
+    color: #ffffff;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+/* Custom Chess-like scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #21201d;
+}
+::-webkit-scrollbar-thumb {
+  background: #3c3934;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #504c45;
+}
+
+/* Board Themes */
+.theme-classic {
+  --cell-light: #eeeed2;
+  --cell-dark: #769656;
+  --board-bg: #455933;
+  --board-border: #313f24;
+}
+
+.theme-wood {
+  --cell-light: #f0d9b5;
+  --cell-dark: #b58863;
+  --board-bg: #805637;
+  --board-border: #5c3a21;
+}
+
+.theme-dark {
+  --cell-light: #52525b;
+  --cell-dark: #27272a;
+  --board-bg: #18181b;
+  --board-border: #09090b;
+}
+
+.theme-glass {
+  --cell-light: #334155;
+  --cell-dark: #1e293b;
+  --board-bg: #0f172a;
+  --board-border: #020617;
+}
+
+/* Shady Slate (Rough basalt rock & gritty dark grooves) */
+.theme-rough {
+  --cell-light: #4b5563;
+  --cell-dark: #27272a;
+  --board-bg: #141416;
+  --board-border: #09090b;
+}
+
+/* Volcanic Crag (Rough volcanic rock & scorched magma grooves) */
+.theme-magma {
+  --cell-light: #5c2919;
+  --cell-dark: #2b110a;
+  --board-bg: #150604;
+  --board-border: #0d0302;
+}
+
+/* Subtle 3D pawn shadow */
+.pawn-shadow {
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.45));
+}
+
+/* Wall 3D beveled appearance */
+.wall-3d-h {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.35), inset 0 -1px 1px rgba(0, 0, 0, 0.4);
+}
+
+.wall-3d-v {
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.5), inset 1px 0 1px rgba(255, 255, 255, 0.35), inset -1px 0 1px rgba(0, 0, 0, 0.4);
+}
+
+/* Chess move dot indicator */
+.move-dot {
+  width: 32%;
+  height: 32%;
+  border-radius: 50%;
+  background: rgba(129, 182, 76, 0.75);
+  box-shadow: 0 0 8px rgba(129, 182, 76, 0.6);
+  pointer-events: none;
+  transition: transform 0.15s ease-out;
+}
+
+.move-dot-jump {
+  width: 82%;
+  height: 82%;
+  border-radius: 50%;
+  border: 4px solid rgba(129, 182, 76, 0.85);
+  box-shadow: 0 0 12px rgba(129, 182, 76, 0.5);
+  pointer-events: none;
+}
+
+/* Pulse animation for active turn banner */
+@keyframes turnGlow {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(129, 182, 76, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(129, 182, 76, 0.6);
+  }
+}
+
+.active-turn-card {
+  animation: turnGlow 2s infinite ease-in-out;
+}
+
+/* Animated Rage Reactions */
+@keyframes reactionPopFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.4) rotate(-10deg);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.22) rotate(4deg);
+  }
+  30% {
+    transform: translateY(-12px) scale(1.05) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-26px) scale(1) rotate(2deg);
+  }
+  75% {
+    opacity: 0.95;
+    transform: translateY(-64px) scale(0.96) rotate(-1deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-100px) scale(0.8) rotate(0deg);
+  }
+}
+
+.reaction-bubble-anim {
+  animation: reactionPopFloat 2.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes rageWobble {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-10deg) scale(1.15); }
+  50% { transform: rotate(8deg) scale(1.1); }
+  75% { transform: rotate(-6deg) scale(1.12); }
+}
+
+.rage-shake {
+  animation: rageWobble 0.7s infinite ease-in-out;
+}
