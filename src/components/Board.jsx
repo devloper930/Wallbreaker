@@ -25,6 +25,7 @@ export default function Board({
 }) {
   const [selectedPawn, setSelectedPawn] = useState(false);
   const [hoveredWall, setHoveredWall] = useState(null); // { r, c, orientation, isValid, reason }
+  const [touchGhost, setTouchGhost] = useState(null); // { x, y, orientation } for mobile drag
   const boardRef = useRef(null);
 
   const currentPlayerIdx = gameState.turn;
@@ -114,8 +115,26 @@ export default function Board({
   const maxWallIndex = boardSize - 2;
   const centerCoord = Math.floor(boardSize / 2);
 
-  // Calculate nearest wall coordinate (r, c) from client coordinates
-  // Only returns coordinates when the cursor is in between two cells (near a groove)
+  // Coordinate mapping for wall placements (Unified across Flipped and Normal Perspectives)
+  // Visual groove index (0 to maxWallIndex) -> Real Board Wall Coordinate (r, c)
+  const getBoardWallCoords = (visualR, visualC) => {
+    const vR = Math.max(0, Math.min(maxWallIndex, visualR));
+    const vC = Math.max(0, Math.min(maxWallIndex, visualC));
+    return {
+      r: flipped ? (maxWallIndex - vR) : vR,
+      c: flipped ? (maxWallIndex - vC) : vC,
+    };
+  };
+
+  // Real Board Wall Coordinate (r, c) -> Visual groove index (0 to maxWallIndex)
+  const getVisualWallCoords = (boardR, boardC) => {
+    return {
+      visualR: flipped ? (maxWallIndex - boardR) : boardR,
+      visualC: flipped ? (maxWallIndex - boardC) : boardC,
+    };
+  };
+
+  // Calculate nearest wall coordinate (r, c) from client pointer/touch coordinates
   const getCoordinatesFromEvent = (e, orientation = null) => {
     if (!boardRef.current) return null;
     const rect = boardRef.current.getBoundingClientRect();
@@ -130,18 +149,18 @@ export default function Board({
 
     const cFloat = relX * boardSize - 1;
     const rFloat = relY * boardSize - 1;
-    let c = Math.round(cFloat);
-    let r = Math.round(rFloat);
-    c = Math.max(0, Math.min(maxWallIndex, c));
-    r = Math.max(0, Math.min(maxWallIndex, r));
+    let visualC = Math.round(cFloat);
+    let visualR = Math.round(rFloat);
+    visualC = Math.max(0, Math.min(maxWallIndex, visualC));
+    visualR = Math.max(0, Math.min(maxWallIndex, visualR));
 
-    // Distance to nearest groove line (0 = directly on groove, 0.5 = center of cell)
-    const distToHorizGroove = Math.abs(rFloat - r);
-    const distToVertGroove = Math.abs(cFloat - c);
+    // Distance to nearest groove line
+    const distToHorizGroove = Math.abs(rFloat - visualR);
+    const distToVertGroove = Math.abs(cFloat - visualC);
 
-    // Only allow wall recommendation when hovering in between two cells
     const currentOri = orientation || wallOrientation;
-    const threshold = 0.32;
+    const isTouch = Boolean(e.touches && e.touches.length > 0) || window.__draggedWallOrientation !== null;
+    const threshold = isTouch ? 0.44 : 0.35;
     const isBetweenCells = currentOri === 'h'
       ? distToHorizGroove <= threshold
       : distToVertGroove <= threshold;
@@ -150,12 +169,53 @@ export default function Board({
       return null;
     }
 
-    if (flipped) {
-      r = maxWallIndex - r;
-      c = maxWallIndex - c;
-    }
-    return { r, c };
+    return getBoardWallCoords(visualR, visualC);
   };
+
+  // Mobile Touch Drag-and-Drop Global Listeners
+  useEffect(() => {
+    const handleTouchStart = (e) => {
+      if (!isMyTurn || gameState.status !== 'playing' || currentPlayer?.wallsLeft <= 0) return;
+      const { orientation, clientX, clientY } = e.detail;
+      setTouchGhost({ x: clientX, y: clientY, orientation });
+      const coords = getCoordinatesFromEvent({ clientX, clientY }, orientation);
+      if (coords) {
+        handleWallHover(coords.r, coords.c, orientation);
+      }
+    };
+
+    const handleTouchMove = (e) => {
+      if (!isMyTurn || gameState.status !== 'playing' || currentPlayer?.wallsLeft <= 0) return;
+      const { orientation, clientX, clientY } = e.detail;
+      setTouchGhost({ x: clientX, y: clientY, orientation });
+      const coords = getCoordinatesFromEvent({ clientX, clientY }, orientation);
+      if (coords) {
+        handleWallHover(coords.r, coords.c, orientation);
+      } else {
+        setHoveredWall(null);
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      setTouchGhost(null);
+      if (!isMyTurn || gameState.status !== 'playing' || currentPlayer?.wallsLeft <= 0) return;
+      const { orientation, clientX, clientY } = e.detail;
+      const coords = getCoordinatesFromEvent({ clientX, clientY }, orientation);
+      if (coords) {
+        handleWallClick(coords.r, coords.c, orientation);
+      }
+      setHoveredWall(null);
+    };
+
+    window.addEventListener('boardWallTouchStart', handleTouchStart);
+    window.addEventListener('boardWallTouchMove', handleTouchMove);
+    window.addEventListener('boardWallTouchEnd', handleTouchEnd);
+    return () => {
+      window.removeEventListener('boardWallTouchStart', handleTouchStart);
+      window.removeEventListener('boardWallTouchMove', handleTouchMove);
+      window.removeEventListener('boardWallTouchEnd', handleTouchEnd);
+    };
+  }, [isMyTurn, gameState.status, currentPlayer?.wallsLeft, wallOrientation, flipped]);
 
   const handleBoardDragOver = (e) => {
     e.preventDefault();
@@ -210,26 +270,26 @@ export default function Board({
   };
 
   return (
-    <div className={`relative p-2 sm:p-4 rounded-2xl bg-[#21201d] border border-[#3c3934] shadow-2xl select-none theme-${theme}`}>
+    <div className={`relative px-0.5 sm:px-4 py-1.5 sm:py-4 rounded-xl sm:rounded-2xl bg-[#21201d] border border-[#3c3934] shadow-2xl select-none theme-${theme}`}>
       {/* Target Edge Glow Banner */}
-      <div className="absolute top-2 left-4 right-4 flex items-center justify-between text-[11px] text-[#9e9c98] px-2 py-0.5">
-        <span className="font-mono">
-          Turn {gameState.turnCount} • {currentPlayer?.name || 'Player'}'s move
+      <div className="flex items-center justify-between text-xs sm:text-sm text-[#9e9c98] px-1 pb-1 font-bold">
+        <span className="font-mono text-white">
+          Turn {gameState.turnCount} • <span className="text-amber-400 font-extrabold">{currentPlayer?.name || 'Player'}</span>'s move
         </span>
         {currentPlayer?.wallsLeft > 0 && isMyTurn && !currentPlayer?.isResigned && (
-          <span className="text-[#81b64c] text-[10px] hidden sm:inline">
-            Press <kbd className="px-1 py-0.5 rounded bg-[#3c3934] text-white font-mono text-[9px]">R</kbd> or click to rotate wall
+          <span className="text-[#81b64c] text-xs hidden sm:inline">
+            Press <kbd className="px-1 py-0.5 rounded bg-[#3c3934] text-white font-mono text-[10px]">R</kbd> or click to rotate wall
           </span>
         )}
       </div>
 
       {/* Main Board Wrapper with Coordinate Labels */}
-      <div className="relative mt-5 aspect-square w-full max-w-[540px] sm:max-w-[560px] md:max-w-[580px] mx-auto">
+      <div className="relative aspect-square w-full max-w-[540px] sm:max-w-[560px] md:max-w-[580px] mx-auto">
         {/* Coordinate Labels (Controlled via Settings: showCoords) */}
         {showCoords && (
           <>
             {/* Left Ranks */}
-            <div className="absolute -left-4 sm:-left-5 top-0 bottom-0 flex flex-col justify-around text-[10px] sm:text-xs font-bold text-[#666461] pointer-events-none">
+            <div className="absolute -left-2 sm:-left-5 top-0 bottom-0 flex flex-col justify-around text-[10px] sm:text-xs font-bold text-[#666461] pointer-events-none">
               {rows.map(r => (
                 <span key={r} className="h-6 flex items-center justify-center font-mono">
                   {boardSize - r}
@@ -237,8 +297,8 @@ export default function Board({
               ))}
             </div>
 
-            {/* Right Ranks */}
-            <div className="absolute -right-4 sm:-right-5 top-0 bottom-0 flex flex-col justify-around text-[10px] sm:text-xs font-bold text-[#666461] pointer-events-none">
+            {/* Right Ranks (Desktop only to maximize mobile width) */}
+            <div className="hidden sm:flex absolute -right-5 top-0 bottom-0 flex-col justify-around text-xs font-bold text-[#666461] pointer-events-none">
               {rows.map(r => (
                 <span key={r} className="h-6 flex items-center justify-center font-mono">
                   {boardSize - r}
@@ -247,7 +307,7 @@ export default function Board({
             </div>
 
             {/* Bottom Files */}
-            <div className="absolute -bottom-5 sm:-bottom-6 left-0 right-0 flex justify-around text-[10px] sm:text-xs font-bold text-[#666461] pointer-events-none">
+            <div className="absolute -bottom-3 sm:-bottom-6 left-0 right-0 flex justify-around text-[10px] sm:text-xs font-bold text-[#666461] pointer-events-none">
               {cols.map(c => (
                 <span key={c} className="w-6 flex items-center justify-center font-mono">
                   {String.fromCharCode(97 + c)}
@@ -255,8 +315,8 @@ export default function Board({
               ))}
             </div>
 
-            {/* Top Files */}
-            <div className="absolute -top-5 sm:-top-6 left-0 right-0 flex justify-around text-[10px] sm:text-xs font-bold text-[#666461] pointer-events-none">
+            {/* Top Files (Desktop only to maximize mobile width) */}
+            <div className="hidden sm:flex absolute -top-6 left-0 right-0 flex justify-around text-xs font-bold text-[#666461] pointer-events-none">
               {cols.map(c => (
                 <span key={c} className="w-6 flex items-center justify-center font-mono">
                   {String.fromCharCode(97 + c)}
@@ -269,11 +329,12 @@ export default function Board({
         {/* Dynamic Interactive Grid Board */}
         <div
           ref={boardRef}
-          className="w-full h-full rounded-xl overflow-hidden shadow-board border-4 border-[#313f24] relative"
+          className="w-full h-full rounded-lg sm:rounded-xl overflow-hidden shadow-board border-2 sm:border-4 border-[#313f24] relative touch-none"
           style={{
+            touchAction: 'none',
             display: 'grid',
-            gridTemplateRows: `repeat(${boardSize - 1}, 1fr clamp(6px, 1.4vw, 12px)) 1fr`,
-            gridTemplateColumns: `repeat(${boardSize - 1}, 1fr clamp(6px, 1.4vw, 12px)) 1fr`,
+            gridTemplateRows: `repeat(${boardSize - 1}, 1fr clamp(3.5px, 0.9vw, 8px)) 1fr`,
+            gridTemplateColumns: `repeat(${boardSize - 1}, 1fr clamp(3.5px, 0.9vw, 8px)) 1fr`,
             backgroundColor: 'var(--board-bg, #455933)',
           }}
           onDragOver={handleBoardDragOver}
@@ -312,7 +373,9 @@ export default function Board({
                   onClick={() => handleCellClick(r, c)}
                   onMouseEnter={() => setHoveredWall(null)}
                   onMouseMove={() => { if (hoveredWall) setHoveredWall(null); }}
-                  className={`relative flex items-center justify-center cursor-pointer transition-all duration-100 ${
+                  className={`relative z-20 flex items-center justify-center cursor-pointer transition-all duration-100 touch-none ${
+                    isCurrentTurnPawn ? 'z-30' : ''
+                  } ${isLegalMove ? 'z-30 ring-2 ring-emerald-400/90 shadow-md' : ''} ${
                     isGoal ? 'ring-1 ring-inset ring-amber-400/40' : ''
                   }`}
                 >
@@ -337,7 +400,7 @@ export default function Board({
 
                     return (
                       <div
-                        className={`relative w-[78%] h-[78%] rounded-full flex items-center justify-center transition-transform duration-200 pawn-shadow ${
+                        className={`relative w-[80%] h-[80%] rounded-full flex items-center justify-center pawn-shadow pawn-3d-tactile pawn-settle ${
                           isFrozen
                             ? 'opacity-60 scale-95 border-2 border-cyan-400'
                             : isCurrentTurnPawn
@@ -349,15 +412,18 @@ export default function Board({
                           boxShadow: isFrozen
                             ? '0 0 10px rgba(34, 211, 238, 0.7)'
                             : isCurrentTurnPawn
-                            ? `0 0 16px ${pawnStyle.wallGlow}, 0 6px 12px rgba(0, 0, 0, 0.6)`
-                            : '0 4px 8px rgba(0, 0, 0, 0.5)',
+                            ? `0 0 18px ${pawnStyle.wallGlow}, 0 6px 14px rgba(0, 0, 0, 0.65), inset 0 2.5px 2px rgba(255, 255, 255, 0.75), inset 0 -3px 4px rgba(0, 0, 0, 0.6)`
+                            : '0 5px 10px rgba(0, 0, 0, 0.55), inset 0 2px 2px rgba(255, 255, 255, 0.6), inset 0 -3px 3px rgba(0, 0, 0, 0.55)',
                           border: isFrozen
                             ? '2px dashed #38bdf8'
                             : isCurrentTurnPawn
                             ? '2.5px solid #ffffff'
-                            : `2px solid ${pawnStyle.ringColor || 'rgba(255, 255, 255, 0.4)'}`,
+                            : `2px solid ${pawnStyle.ringColor || 'rgba(255, 255, 255, 0.45)'}`,
                         }}
                       >
+                        {/* 3D Specular Light Overlay */}
+                        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/40 via-white/10 to-transparent pointer-events-none" />
+
                         {/* Frozen indicator badge */}
                         {isFrozen && (
                           <div className="absolute -top-1.5 -right-1.5 bg-cyan-950 border border-cyan-400 text-cyan-200 text-[10px] rounded-full px-1 shadow z-20 font-bold">
@@ -365,14 +431,14 @@ export default function Board({
                           </div>
                         )}
 
-                        {/* Inner emblem / crest / gem core (NO numbers) */}
+                        {/* Inner emblem / crest / gem core */}
                         {pawnStyle.icon ? (
-                          <span className="text-white text-base sm:text-lg select-none drop-shadow pointer-events-none font-serif leading-none">
+                          <span className="text-white text-base sm:text-lg select-none drop-shadow pointer-events-none font-serif leading-none z-10">
                             {pawnStyle.icon}
                           </span>
                         ) : (
-                          <div className="w-[46%] h-[46%] rounded-full border-2 border-white/60 bg-white/20 shadow-inner flex items-center justify-center pointer-events-none">
-                            <div className="w-1.5 h-1.5 rounded-full bg-white/90 shadow-sm" />
+                          <div className="w-[46%] h-[46%] rounded-full border-2 border-white/70 bg-white/25 shadow-inner flex items-center justify-center pointer-events-none z-10">
+                            <div className="w-1.5 h-1.5 rounded-full bg-white/95 shadow-sm" />
                           </div>
                         )}
 
@@ -396,17 +462,14 @@ export default function Board({
             })
           )}
 
-          {/* 2. Placed Walls (Colors strictly match player piece colors) */}
+          {/* 2. Placed Walls (Normalized with getVisualWallCoords for all perspectives) */}
           {walls.map((wall) => {
-            // Find grid coordinates based on flipped orientation
-            const rIdx = rows.indexOf(wall.r);
-            const cIdx = cols.indexOf(wall.c);
+            const { visualR, visualC } = getVisualWallCoords(wall.r, wall.c);
             const wallPlayerStyle = getPlayerStyle(wall.player, pieceTheme);
 
             if (wall.orientation === 'h') {
-              // Horizontal wall spans: groove between rIdx and rIdx+1, spanning from cIdx to cIdx+1 (3 grid units)
-              const startRow = Math.min(rIdx, rIdx + (flipped ? -1 : 1)) * 2 + 2;
-              const startCol = Math.min(cIdx, cIdx + (flipped ? -1 : 1)) * 2 + 1;
+              const startRow = visualR * 2 + 2;
+              const startCol = visualC * 2 + 1;
 
               return (
                 <div
@@ -417,15 +480,14 @@ export default function Board({
                     backgroundColor: wallPlayerStyle.color,
                     backgroundImage: wallPlayerStyle.wallGradientH,
                     borderColor: wallPlayerStyle.wallBorder,
-                    boxShadow: `0 3px 6px rgba(0, 0, 0, 0.5), 0 0 10px ${wallPlayerStyle.wallGlow}`,
+                    boxShadow: `0 4px 8px rgba(0, 0, 0, 0.6), 0 0 12px ${wallPlayerStyle.wallGlow}`,
                   }}
-                  className="z-20 rounded-sm wall-3d-h border pointer-events-none transition-all"
+                  className="z-20 rounded-sm wall-3d-h border wall-anim-slam pointer-events-none transition-all"
                 />
               );
             } else {
-              // Vertical wall spans: groove between cIdx and cIdx+1, spanning from rIdx to rIdx+1 (3 grid units)
-              const startRow = Math.min(rIdx, rIdx + (flipped ? -1 : 1)) * 2 + 1;
-              const startCol = Math.min(cIdx, cIdx + (flipped ? -1 : 1)) * 2 + 2;
+              const startRow = visualR * 2 + 1;
+              const startCol = visualC * 2 + 2;
 
               return (
                 <div
@@ -436,9 +498,9 @@ export default function Board({
                     backgroundColor: wallPlayerStyle.color,
                     backgroundImage: wallPlayerStyle.wallGradientV,
                     borderColor: wallPlayerStyle.wallBorder,
-                    boxShadow: `2px 2px 6px rgba(0, 0, 0, 0.5), 0 0 10px ${wallPlayerStyle.wallGlow}`,
+                    boxShadow: `3px 3px 8px rgba(0, 0, 0, 0.6), 0 0 12px ${wallPlayerStyle.wallGlow}`,
                   }}
-                  className="z-20 rounded-sm wall-3d-v border pointer-events-none transition-all"
+                  className="z-20 rounded-sm wall-3d-v border wall-anim-slam pointer-events-none transition-all"
                 />
               );
             }
@@ -447,13 +509,12 @@ export default function Board({
           {/* 3. Wall Hover Preview (Ghost Wall matching current player color) */}
           {hoveredWall && (
             (() => {
-              const rIdx = rows.indexOf(hoveredWall.r);
-              const cIdx = cols.indexOf(hoveredWall.c);
+              const { visualR, visualC } = getVisualWallCoords(hoveredWall.r, hoveredWall.c);
               const currentPStyle = getPlayerStyle(currentPlayerIdx, pieceTheme);
 
               if (hoveredWall.orientation === 'h') {
-                const startRow = Math.min(rIdx, rIdx + (flipped ? -1 : 1)) * 2 + 2;
-                const startCol = Math.min(cIdx, cIdx + (flipped ? -1 : 1)) * 2 + 1;
+                const startRow = visualR * 2 + 2;
+                const startCol = visualC * 2 + 1;
 
                 return (
                   <div
@@ -461,18 +522,18 @@ export default function Board({
                       gridRow: `${startRow} / span 1`,
                       gridColumn: `${startCol} / span 3`,
                       backgroundImage: hoveredWall.isValid ? currentPStyle.wallGradientH : undefined,
-                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.85)',
+                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.88)',
                       borderColor: hoveredWall.isValid ? '#ffffff' : '#fca5a5',
                       boxShadow: hoveredWall.isValid
-                        ? `0 0 16px ${currentPStyle.wallGlow}, 0 0 6px #ffffff`
-                        : '0 0 14px rgba(239, 68, 68, 0.9)',
+                        ? `0 0 18px ${currentPStyle.wallGlow}, 0 0 8px #ffffff`
+                        : '0 0 16px rgba(239, 68, 68, 0.95)',
                     }}
-                    className="z-30 rounded-sm pointer-events-none transition-all duration-75 border-2 animate-pulse"
+                    className="z-30 rounded-sm wall-3d-h pointer-events-none transition-all duration-75 border-2 animate-pulse"
                   />
                 );
               } else {
-                const startRow = Math.min(rIdx, rIdx + (flipped ? -1 : 1)) * 2 + 1;
-                const startCol = Math.min(cIdx, cIdx + (flipped ? -1 : 1)) * 2 + 2;
+                const startRow = visualR * 2 + 1;
+                const startCol = visualC * 2 + 2;
 
                 return (
                   <div
@@ -480,36 +541,38 @@ export default function Board({
                       gridRow: `${startRow} / span 3`,
                       gridColumn: `${startCol} / span 1`,
                       backgroundImage: hoveredWall.isValid ? currentPStyle.wallGradientV : undefined,
-                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.85)',
+                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.88)',
                       borderColor: hoveredWall.isValid ? '#ffffff' : '#fca5a5',
                       boxShadow: hoveredWall.isValid
-                        ? `0 0 16px ${currentPStyle.wallGlow}, 0 0 6px #ffffff`
-                        : '0 0 14px rgba(239, 68, 68, 0.9)',
+                        ? `0 0 18px ${currentPStyle.wallGlow}, 0 0 8px #ffffff`
+                        : '0 0 16px rgba(239, 68, 68, 0.95)',
                     }}
-                    className="z-30 rounded-sm pointer-events-none transition-all duration-75 border-2 animate-pulse"
+                    className="z-30 rounded-sm wall-3d-v pointer-events-none transition-all duration-75 border-2 animate-pulse"
                   />
                 );
               }
             })()
           )}
 
-          {/* 4a. Interactive Horizontal Grooves (between cells vertically) */}
-          {rows.slice(0, boardSize - 1).map((r, rIdx) =>
-            cols.map((c, cIdx) => {
-              const gridRow = rIdx * 2 + 2;
-              const gridCol = cIdx * 2 + 1;
-              const anchorC = Math.min(c, maxWallIndex);
+          {/* 4a. Interactive Horizontal Grooves (between cells vertically, with generous touch areas) */}
+          {Array.from({ length: boardSize - 1 }, (_, vR) =>
+            Array.from({ length: boardSize }, (_, vC) => {
+              const gridRow = vR * 2 + 2;
+              const gridCol = vC * 2 + 1;
+              const anchorC = Math.min(vC, maxWallIndex);
+              const { r, c } = getBoardWallCoords(vR, anchorC);
 
               return (
                 <div
-                  key={`h-groove-${r}-${c}`}
+                  key={`h-groove-${vR}-${vC}`}
                   style={{
+                    touchAction: 'none',
                     gridRow: `${gridRow} / span 1`,
                     gridColumn: `${gridCol} / span 1`,
                   }}
-                  className="relative group z-10 cursor-pointer"
-                  onMouseEnter={() => handleWallHover(r, anchorC, 'h')}
-                  onClick={() => handleWallClick(r, anchorC, 'h')}
+                  className="relative group z-10 cursor-pointer touch-none before:absolute before:inset-0 sm:before:-inset-y-0.5 before:z-10"
+                  onMouseEnter={() => handleWallHover(r, c, 'h')}
+                  onClick={() => handleWallClick(r, c, 'h')}
                 >
                   <div className="w-full h-full bg-transparent group-hover:bg-amber-400/40 transition-colors rounded-sm" />
                 </div>
@@ -517,23 +580,25 @@ export default function Board({
             })
           )}
 
-          {/* 4b. Interactive Vertical Grooves (between cells horizontally) */}
-          {rows.map((r, rIdx) =>
-            cols.slice(0, boardSize - 1).map((c, cIdx) => {
-              const gridRow = rIdx * 2 + 1;
-              const gridCol = cIdx * 2 + 2;
-              const anchorR = Math.min(r, maxWallIndex);
+          {/* 4b. Interactive Vertical Grooves (between cells horizontally, with generous touch areas) */}
+          {Array.from({ length: boardSize }, (_, vR) =>
+            Array.from({ length: boardSize - 1 }, (_, vC) => {
+              const gridRow = vR * 2 + 1;
+              const gridCol = vC * 2 + 2;
+              const anchorR = Math.min(vR, maxWallIndex);
+              const { r, c } = getBoardWallCoords(anchorR, vC);
 
               return (
                 <div
-                  key={`v-groove-${r}-${c}`}
+                  key={`v-groove-${vR}-${vC}`}
                   style={{
+                    touchAction: 'none',
                     gridRow: `${gridRow} / span 1`,
                     gridColumn: `${gridCol} / span 1`,
                   }}
-                  className="relative group z-10 cursor-pointer"
-                  onMouseEnter={() => handleWallHover(anchorR, c, 'v')}
-                  onClick={() => handleWallClick(anchorR, c, 'v')}
+                  className="relative group z-10 cursor-pointer touch-none before:absolute before:inset-0 sm:before:-inset-x-0.5 before:z-10"
+                  onMouseEnter={() => handleWallHover(r, c, 'v')}
+                  onClick={() => handleWallClick(r, c, 'v')}
                 >
                   <div className="w-full h-full bg-transparent group-hover:bg-cyan-400/40 transition-colors rounded-sm" />
                 </div>
@@ -541,20 +606,22 @@ export default function Board({
             })
           )}
 
-          {/* 4c. Interactive Intersections */}
-          {rows.slice(0, boardSize - 1).map((r, rIdx) =>
-            cols.slice(0, boardSize - 1).map((c, cIdx) => {
-              const gridRow = rIdx * 2 + 2;
-              const gridCol = cIdx * 2 + 2;
+          {/* 4c. Interactive Intersections (with generous touch areas) */}
+          {Array.from({ length: boardSize - 1 }, (_, vR) =>
+            Array.from({ length: boardSize - 1 }, (_, vC) => {
+              const gridRow = vR * 2 + 2;
+              const gridCol = vC * 2 + 2;
+              const { r, c } = getBoardWallCoords(vR, vC);
 
               return (
                 <div
-                  key={`intersection-${r}-${c}`}
+                  key={`intersection-${vR}-${vC}`}
                   style={{
+                    touchAction: 'none',
                     gridRow: `${gridRow} / span 1`,
                     gridColumn: `${gridCol} / span 1`,
                   }}
-                  className="relative group z-20 cursor-pointer"
+                  className="relative group z-10 cursor-pointer touch-none before:absolute before:inset-0 sm:before:-inset-0.5 before:z-10"
                   onMouseEnter={() => handleWallHover(r, c)}
                   onClick={() => handleWallClick(r, c)}
                 >
@@ -568,6 +635,30 @@ export default function Board({
           {showReactions && <ReactionOverlay reactions={reactions} />}
         </div>
       </div>
+
+      {/* Floating mobile touch-drag wall preview ghost following the player's finger */}
+      {touchGhost && (
+        <div
+          className="fixed pointer-events-none z-50 transform -translate-x-1/2 -translate-y-1/2 opacity-95 transition-none"
+          style={{
+            left: `${touchGhost.x}px`,
+            top: `${touchGhost.y}px`,
+          }}
+        >
+          <div
+            className={`rounded shadow-2xl border-2 border-white ${
+              touchGhost.orientation === 'h' ? 'w-20 h-4 wall-3d-h' : 'w-4 h-20 wall-3d-v'
+            }`}
+            style={{
+              backgroundColor: getPlayerStyle(currentPlayerIdx, pieceTheme).color,
+              backgroundImage: touchGhost.orientation === 'h'
+                ? getPlayerStyle(currentPlayerIdx, pieceTheme).wallGradientH
+                : getPlayerStyle(currentPlayerIdx, pieceTheme).wallGradientV,
+              boxShadow: `0 0 24px ${getPlayerStyle(currentPlayerIdx, pieceTheme).wallGlow}, 0 6px 16px rgba(0, 0, 0, 0.7)`,
+            }}
+          />
+        </div>
+      )}
 
       {/* Wall Placement Warning Tooltip if hovered wall is illegal */}
       {hoveredWall && !hoveredWall.isValid && (

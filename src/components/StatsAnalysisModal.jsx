@@ -319,6 +319,8 @@ export default function StatsAnalysisModal({
   const draws = userProfile?.draws || 0;
   const totalGames = wins + losses + draws;
   const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
+  const drawRate = totalGames > 0 ? Math.round((draws / totalGames) * 100) : 0;
+  const lossRate = totalGames > 0 ? Math.max(0, 100 - winRate - drawRate) : 0;
   const rating = userProfile?.rating || 400;
   const avatar = userProfile?.avatar || '👤';
   const name = userProfile?.name || 'Player';
@@ -446,10 +448,12 @@ export default function StatsAnalysisModal({
                     className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold border-2 ${
                       selectedMatch.result === 'win'
                         ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400'
+                        : selectedMatch.result === 'draw'
+                        ? 'bg-amber-950/80 border-amber-500 text-amber-400'
                         : 'bg-red-950/80 border-red-500 text-red-400'
                     }`}
                   >
-                    {selectedMatch.result === 'win' ? 'WIN' : 'LOSS'}
+                    {selectedMatch.result === 'win' ? 'WIN' : selectedMatch.result === 'draw' ? 'DRAW' : 'LOSS'}
                   </div>
                   <div>
                     <div className="text-xs text-[#9e9c98]">VS OPPONENT</div>
@@ -468,10 +472,14 @@ export default function StatsAnalysisModal({
                   <div className="text-xs text-[#9e9c98]">ELO CHANGE</div>
                   <div
                     className={`text-lg font-mono font-extrabold ${
-                      selectedMatch.ratingChange >= 0 ? 'text-emerald-400' : 'text-red-400'
+                      selectedMatch.ratingChange > 0
+                        ? 'text-emerald-400'
+                        : selectedMatch.ratingChange === 0
+                        ? 'text-amber-400'
+                        : 'text-red-400'
                     }`}
                   >
-                    {selectedMatch.ratingChange >= 0 ? `+${selectedMatch.ratingChange}` : selectedMatch.ratingChange}
+                    {selectedMatch.ratingChange > 0 ? `+${selectedMatch.ratingChange}` : selectedMatch.ratingChange}
                   </div>
                   <div className="text-[10px] text-[#666461] font-mono">Rating: {selectedMatch.ratingAfter}</div>
                 </div>
@@ -993,10 +1001,12 @@ export default function StatsAnalysisModal({
                         className={`w-9 h-9 rounded-lg font-bold text-xs flex items-center justify-center border ${
                           m.result === 'win'
                             ? 'bg-emerald-950/80 text-emerald-400 border-emerald-600/60'
+                            : m.result === 'draw'
+                            ? 'bg-amber-950/80 text-amber-400 border-amber-600/60'
                             : 'bg-red-950/80 text-red-400 border-red-600/60'
                         }`}
                       >
-                        {m.result === 'win' ? 'WIN' : 'LOSS'}
+                        {m.result === 'win' ? 'WIN' : m.result === 'draw' ? 'DRAW' : 'LOSS'}
                       </span>
 
                       <div>
@@ -1021,10 +1031,14 @@ export default function StatsAnalysisModal({
                       <div className="text-right sm:text-right">
                         <div
                           className={`text-xs font-mono font-bold ${
-                            m.ratingChange >= 0 ? 'text-emerald-400' : 'text-red-400'
+                            m.ratingChange > 0
+                              ? 'text-emerald-400'
+                              : m.ratingChange === 0
+                              ? 'text-amber-400'
+                              : 'text-red-400'
                           }`}
                         >
-                          {m.ratingChange >= 0 ? `+${m.ratingChange}` : m.ratingChange}
+                          {m.ratingChange > 0 ? `+${m.ratingChange}` : m.ratingChange}
                         </div>
                         <div className="text-[10px] text-[#666461]">{m.date}</div>
                       </div>
@@ -1074,7 +1088,7 @@ export default function StatsAnalysisModal({
               </div>
 
               {/* Stats Metrics Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                 <div className="p-3.5 rounded-xl bg-[#272522] border border-[#3c3934] text-center">
                   <div className="text-2xl font-extrabold text-white font-mono">{totalGames}</div>
                   <div className="text-[10px] font-bold text-[#9e9c98] uppercase mt-0.5">Games Played</div>
@@ -1088,30 +1102,42 @@ export default function StatsAnalysisModal({
                   <div className="text-[10px] font-bold text-[#9e9c98] uppercase mt-0.5">Losses</div>
                 </div>
                 <div className="p-3.5 rounded-xl bg-[#272522] border border-[#3c3934] text-center">
-                  <div className="text-2xl font-extrabold text-amber-400 font-mono">{winRate}%</div>
+                  <div className="text-2xl font-extrabold text-amber-400 font-mono">{draws}</div>
+                  <div className="text-[10px] font-bold text-[#9e9c98] uppercase mt-0.5">Draws</div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-[#272522] border border-[#3c3934] text-center col-span-2 sm:col-span-1">
+                  <div className="text-2xl font-extrabold text-cyan-400 font-mono">{winRate}%</div>
                   <div className="text-[10px] font-bold text-[#9e9c98] uppercase mt-0.5">Win Rate</div>
                 </div>
               </div>
 
-              {/* Win Rate Bar Gauge */}
+              {/* Match Outcomes Distribution Bar Gauge */}
               <div className="p-3.5 rounded-xl bg-[#272522] border border-[#3c3934] space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-white">
-                  <span>Win / Loss Distribution</span>
+                  <span>Match Outcomes Distribution</span>
                   <span className="font-mono text-emerald-400">{winRate}% Win Rate</span>
                 </div>
                 <div className="h-3 w-full rounded-full bg-[#1b1a17] overflow-hidden flex">
                   <div
                     className="bg-emerald-500 h-full transition-all duration-500"
                     style={{ width: `${winRate}%` }}
+                    title={`Wins: ${wins} (${winRate}%)`}
+                  />
+                  <div
+                    className="bg-amber-500 h-full transition-all duration-500"
+                    style={{ width: `${drawRate}%` }}
+                    title={`Draws: ${draws} (${drawRate}%)`}
                   />
                   <div
                     className="bg-red-500 h-full transition-all duration-500"
-                    style={{ width: `${100 - winRate}%` }}
+                    style={{ width: `${lossRate}%` }}
+                    title={`Losses: ${losses} (${lossRate}%)`}
                   />
                 </div>
                 <div className="flex justify-between text-[10px] text-[#9e9c98] font-mono">
-                  <span>{wins} Won ({winRate}%)</span>
-                  <span>{losses} Lost ({100 - winRate}%)</span>
+                  <span className="text-emerald-400">{wins} Won ({winRate}%)</span>
+                  <span className="text-amber-400">{draws} Drawn ({drawRate}%)</span>
+                  <span className="text-red-400">{losses} Lost ({lossRate}%)</span>
                 </div>
               </div>
             </div>

@@ -11,6 +11,7 @@ export default function GameControls({
   wallsLeft,
   canResign = true,
   canDraw = true,
+  isDrawPending = false,
   status = 'playing',
   confirmResign = true,
 }) {
@@ -28,15 +29,15 @@ export default function GameControls({
     <div className="bg-[#21201d] rounded-xl border border-[#3c3934] p-3 space-y-3 select-none">
       {/* Wall Orientation Selector */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-bold text-[#9e9c98] flex items-center gap-1.5 uppercase tracking-wide">
-          <Shield className="w-3.5 h-3.5 text-amber-400" />
+        <span className="text-xs sm:text-sm font-bold text-[#9e9c98] flex items-center gap-1.5 uppercase tracking-wide">
+          <Shield className="w-4 h-4 text-amber-400" />
           Wall Tool
         </span>
 
         <button
           onClick={onToggleOrientation}
           title="Toggle wall orientation (Shortcut: R)"
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#2b2926] hover:bg-[#3c3934] border border-[#3c3934] transition-all text-xs font-semibold text-white active:scale-95"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#2b2926] hover:bg-[#3c3934] border border-[#3c3934] transition-all text-xs sm:text-sm font-bold text-white active:scale-95 cursor-pointer"
         >
           <div
             className={`w-4 h-4 rounded-sm border transition-all flex items-center justify-center ${
@@ -52,7 +53,7 @@ export default function GameControls({
             />
           </div>
           <span>{wallOrientation === 'h' ? 'Horizontal' : 'Vertical'}</span>
-          <kbd className="text-[10px] bg-[#1b1a17] text-[#9e9c98] px-1 py-0.5 rounded font-mono border border-[#3c3934]">
+          <kbd className="text-[10px] sm:text-xs bg-[#1b1a17] text-[#9e9c98] px-1.5 py-0.5 rounded font-mono border border-[#3c3934]">
             R
           </kbd>
         </button>
@@ -64,9 +65,9 @@ export default function GameControls({
         <button
           onClick={onFlipBoard}
           title="Flip board perspective"
-          className="flex flex-col items-center justify-center p-2 rounded-lg bg-[#272522] hover:bg-[#2b2926] border border-[#3c3934] text-[#9e9c98] hover:text-white transition-all text-[11px] font-medium"
+          className="flex flex-col items-center justify-center p-2.5 sm:p-2 rounded-xl bg-[#272522] hover:bg-[#2b2926] border border-[#3c3934] text-[#9e9c98] hover:text-white transition-all text-xs sm:text-sm font-bold cursor-pointer"
         >
-          <RefreshCw className={`w-4 h-4 mb-1 transition-transform ${flipped ? 'rotate-180' : ''}`} />
+          <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 mb-1 transition-transform ${flipped ? 'rotate-180' : ''}`} />
           <span>Flip</span>
         </button>
 
@@ -74,11 +75,11 @@ export default function GameControls({
         <button
           onClick={onOfferDraw}
           disabled={!canDraw || status !== 'playing'}
-          title="Offer Draw to Opponent"
-          className="flex flex-col items-center justify-center p-2 rounded-lg bg-[#272522] hover:bg-[#2b2926] border border-[#3c3934] text-[#9e9c98] hover:text-white transition-all text-[11px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+          title={isDrawPending ? 'Draw offer sent, waiting for reply...' : 'Offer Draw to Opponent'}
+          className="flex flex-col items-center justify-center p-2.5 sm:p-2 rounded-xl bg-[#272522] hover:bg-[#2b2926] border border-[#3c3934] text-[#9e9c98] hover:text-white transition-all text-xs sm:text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
-          <Handshake className="w-4 h-4 mb-1 text-sky-400" />
-          <span>Draw</span>
+          <Handshake className={`w-4 h-4 sm:w-5 sm:h-5 mb-1 text-sky-400 ${isDrawPending ? 'animate-pulse text-amber-400' : ''}`} />
+          <span>{isDrawPending ? 'Offered...' : 'Draw'}</span>
         </button>
 
         {/* Resign */}
@@ -86,9 +87,9 @@ export default function GameControls({
           onClick={handleResignClick}
           disabled={!canResign || status !== 'playing'}
           title="Resign Game"
-          className="flex flex-col items-center justify-center p-2 rounded-lg bg-[#272522] hover:bg-red-950/40 hover:border-red-800/60 border border-[#3c3934] text-[#9e9c98] hover:text-red-400 transition-all text-[11px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex flex-col items-center justify-center p-2.5 sm:p-2 rounded-xl bg-[#272522] hover:bg-red-950/40 hover:border-red-800/60 border border-[#3c3934] text-[#9e9c98] hover:text-red-400 transition-all text-xs sm:text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
-          <Flag className="w-4 h-4 mb-1 text-red-400" />
+          <Flag className="w-4 h-4 sm:w-5 sm:h-5 mb-1 text-red-400" />
           <span>Resign</span>
         </button>
       </div>

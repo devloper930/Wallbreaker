@@ -81,49 +81,6 @@ export default function SettingsModal({
 
         {/* Settings Body */}
         <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-          {/* Account & Player Profile Section */}
-          <div className="p-3.5 rounded-xl bg-[#1b1a17] border border-[#3c3934] space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#9e9c98]">
-                Account & Sync
-              </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#272522] border border-[#3c3934] text-[#81b64c]">
-                Device Local
-              </span>
-            </div>
-
-            <div className="space-y-3 pt-1">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#81b64c] to-emerald-400 flex items-center justify-center text-xl shadow border border-white/20 flex-shrink-0">
-                    {userProfile?.avatar || '👤'}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
-                      <span>{userProfile?.name || 'Player'}</span>
-                      <span className="text-[9px] px-1 rounded bg-[#272522] text-[#81b64c] font-mono font-bold">
-                        {userProfile?.title || 'NOVICE'}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-[#9e9c98] truncate mt-0.5">
-                      Rating: {userProfile?.rating || 400} Elo • Saved locally
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onOpenAuthModal) onOpenAuthModal();
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-[#81b64c] hover:bg-[#95c85d] text-black text-xs font-bold transition-all cursor-pointer flex-shrink-0 shadow"
-                >
-                  Edit Name
-                </button>
-              </div>
-            </div>
-          </div>
-
           {/* 1. Board Coordinates Toggle */}
           <div className="flex items-center justify-between p-3 rounded-xl bg-[#1b1a17] border border-[#3c3934]">
             <div className="flex items-center gap-3">

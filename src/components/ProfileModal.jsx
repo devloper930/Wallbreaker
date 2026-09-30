@@ -79,7 +79,7 @@ export default function ProfileModal({ isOpen, onClose, profile, onProfileUpdate
         <div className="px-5 py-4 bg-[#272522] border-b border-[#3c3934] flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <User className="w-5 h-5 text-[#81b64c]" />
-            <h3 className="text-base font-bold text-white tracking-wide">PLAYER PROFILE & RANKS</h3>
+            <h3 className="text-base font-bold text-white tracking-wide">PROFILE & CUSTOMIZATION</h3>
           </div>
           <button
             onClick={onClose}
@@ -112,13 +112,84 @@ export default function ProfileModal({ isOpen, onClose, profile, onProfileUpdate
                 <span>•</span>
                 <span className="text-emerald-400 font-semibold">{currentTier.name}</span>
               </div>
-              <div className="flex items-center gap-2 text-[11px] text-[#666461] mt-1 font-mono">
-                <span>W: {profile.wins || 0}</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] text-[#666461] mt-1 font-mono flex-wrap">
+                <span>W: <strong className="text-emerald-400">{profile.wins || 0}</strong></span>
                 <span>•</span>
-                <span>L: {profile.losses || 0}</span>
+                <span>L: <strong className="text-red-400">{profile.losses || 0}</strong></span>
                 <span>•</span>
-                <span>Rate: {winRate}%</span>
+                <span>D: <strong className="text-amber-400">{profile.draws || 0}</strong></span>
+                <span>•</span>
+                <span>Rate: <strong className="text-white">{winRate}%</strong></span>
               </div>
+            </div>
+          </div>
+
+          {/* Edit Display Name */}
+          <div className="p-3.5 rounded-xl bg-[#1b1a17] border border-[#3c3934] space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-white">
+                Edit Player Name
+              </span>
+              <span className="text-[10px] font-mono text-[#81b64c] bg-[#272522] px-2 py-0.5 rounded border border-[#3c3934]">
+                Display Name
+              </span>
+            </div>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter your name"
+              maxLength={18}
+              className="w-full px-3.5 py-2.5 bg-[#161512] border border-[#3c3934] focus:border-[#81b64c] rounded-xl text-white font-medium text-sm outline-none transition-colors"
+            />
+          </div>
+
+          {/* Select Avatar */}
+          <div className="p-3.5 rounded-xl bg-[#1b1a17] border border-[#3c3934] space-y-2.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-white block">
+              Choose Avatar Icon
+            </label>
+            <div className="grid grid-cols-6 gap-2">
+              {AVAILABLE_AVATARS.map((av) => (
+                <button
+                  type="button"
+                  key={av.id}
+                  onClick={() => setSelectedAvatar(av.icon)}
+                  title={av.label}
+                  className={`w-11 h-11 rounded-xl text-xl flex items-center justify-center transition-all ${
+                    selectedAvatar === av.icon
+                      ? 'bg-[#81b64c]/20 border-2 border-[#81b64c] scale-105 shadow-md shadow-[#81b64c]/20'
+                      : 'bg-[#272522] border border-[#3c3934] hover:bg-[#3c3934]'
+                  }`}
+                >
+                  {av.icon}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Select Country / Region */}
+          <div className="p-3.5 rounded-xl bg-[#1b1a17] border border-[#3c3934] space-y-2.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-white block flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Country / Regional Flag</span>
+            </label>
+            <div className="grid grid-cols-6 gap-1.5">
+              {AVAILABLE_FLAGS.map((f) => (
+                <button
+                  type="button"
+                  key={f.code}
+                  onClick={() => setSelectedCountry(f.flag)}
+                  title={f.label}
+                  className={`py-1.5 rounded-lg text-lg flex items-center justify-center transition-all ${
+                    selectedCountry === f.flag
+                      ? 'bg-[#2b2926] border-2 border-cyan-400 scale-105 shadow'
+                      : 'bg-[#272522] border border-[#3c3934] hover:bg-[#3c3934]'
+                  }`}
+                >
+                  {f.flag}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -223,69 +294,6 @@ export default function ProfileModal({ isOpen, onClose, profile, onProfileUpdate
                   );
                 })}
               </div>
-            </div>
-          </div>
-
-          {/* Edit Display Name */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[#9e9c98] block">
-              Player Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter your name"
-              maxLength={18}
-              className="w-full px-3.5 py-2.5 bg-[#161512] border border-[#3c3934] rounded-xl text-white font-medium text-sm focus:outline-none focus:border-[#81b64c]"
-            />
-          </div>
-
-          {/* Select Avatar */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[#9e9c98] block">
-              Choose Avatar
-            </label>
-            <div className="grid grid-cols-6 gap-2">
-              {AVAILABLE_AVATARS.map((av) => (
-                <button
-                  type="button"
-                  key={av.id}
-                  onClick={() => setSelectedAvatar(av.icon)}
-                  title={av.label}
-                  className={`w-11 h-11 rounded-xl text-xl flex items-center justify-center transition-all ${
-                    selectedAvatar === av.icon
-                      ? 'bg-[#81b64c]/20 border-2 border-[#81b64c] scale-105 shadow-md shadow-[#81b64c]/20'
-                      : 'bg-[#272522] border border-[#3c3934] hover:bg-[#3c3934]'
-                  }`}
-                >
-                  {av.icon}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Select Country / Region */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[#9e9c98] block flex items-center gap-1">
-              <Globe className="w-3.5 h-3.5 text-cyan-400" /> Country / Region
-            </label>
-            <div className="grid grid-cols-6 gap-1.5">
-              {AVAILABLE_FLAGS.map((f) => (
-                <button
-                  type="button"
-                  key={f.code}
-                  onClick={() => setSelectedCountry(f.flag)}
-                  title={f.label}
-                  className={`py-1.5 rounded-lg text-lg flex items-center justify-center transition-all ${
-                    selectedCountry === f.flag
-                      ? 'bg-[#2b2926] border-2 border-cyan-400 scale-105 shadow'
-                      : 'bg-[#272522] border border-[#3c3934] hover:bg-[#3c3934]'
-                  }`}
-                >
-                  {f.flag}
-                </button>
-              ))}
             </div>
           </div>
 

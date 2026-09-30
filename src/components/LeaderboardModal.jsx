@@ -95,6 +95,8 @@ export default function LeaderboardModal({
                 <span>W: <strong className="text-emerald-400">{userStanding.wins}</strong></span>
                 <span>•</span>
                 <span>L: <strong className="text-red-400">{userStanding.losses}</strong></span>
+                <span>•</span>
+                <span>D: <strong className="text-amber-400">{userStanding.draws || 0}</strong></span>
               </div>
             </div>
           </div>
@@ -232,7 +234,7 @@ export default function LeaderboardModal({
                       <div className="text-[11px] text-[#9e9c98] mt-0.5 flex items-center gap-2 font-mono">
                         <span className="text-emerald-400 font-semibold">{player.winRate}% Win</span>
                         <span>•</span>
-                        <span>{player.wins}W / {player.losses}L</span>
+                        <span>{player.wins}W / {player.losses}L / {player.draws || 0}D</span>
                       </div>
                     </div>
                   </div>

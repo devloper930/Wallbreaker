@@ -445,6 +445,57 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Draw Offer
+  socket.on('game:draw_offer', (payload = {}) => {
+    try {
+      const { roomCode, playerIndex } = payload;
+      const code = sanitizeRoomCode(roomCode);
+      const room = rooms.get(code);
+      if (!room || room.gameState.status !== 'playing') return;
+
+      socket.to(code).emit('game:draw_offered', {
+        fromPlayerIndex: playerIndex,
+        playerName: room.gameState.players[playerIndex]?.name || 'Opponent',
+      });
+    } catch (err) {
+      log('ERROR', { event: 'game:draw_offer', socketId: socket.id, error: err.message });
+    }
+  });
+
+  // Draw Accept
+  socket.on('game:draw_accept', (payload = {}) => {
+    try {
+      const { roomCode } = payload;
+      const code = sanitizeRoomCode(roomCode);
+      const room = rooms.get(code);
+      if (!room || room.gameState.status !== 'playing') return;
+
+      room.gameState.status = 'ended';
+      room.gameState.winner = null;
+      room.gameState.winReason = 'Game drawn by mutual agreement.';
+      room.endedAt = Date.now();
+
+      io.to(code).emit('game:state_update', room.gameState);
+      io.to(code).emit('game:draw_accepted');
+    } catch (err) {
+      log('ERROR', { event: 'game:draw_accept', socketId: socket.id, error: err.message });
+    }
+  });
+
+  // Draw Decline
+  socket.on('game:draw_decline', (payload = {}) => {
+    try {
+      const { roomCode } = payload;
+      const code = sanitizeRoomCode(roomCode);
+      const room = rooms.get(code);
+      if (!room) return;
+
+      socket.to(code).emit('game:draw_declined');
+    } catch (err) {
+      log('ERROR', { event: 'game:draw_decline', socketId: socket.id, error: err.message });
+    }
+  });
+
   // Rematch
   socket.on('game:rematch', (payload = {}) => {
     try {
@@ -698,7 +749,26 @@ io.on('connection', (socket) => {
       for (const [code, room] of rooms.entries()) {
         const idx = room.players.findIndex((p) => p.socketId === socket.id);
         if (idx !== -1) {
-          io.to(code).emit('player:disconnected', { playerIndex: room.players[idx].playerIndex });
+          const disconnectedPlayerIndex = room.players[idx].playerIndex;
+          io.to(code).emit('player:disconnected', { playerIndex: disconnectedPlayerIndex });
+
+          // If game is in progress, treat player disconnect as an immediate forfeit (loss)
+          if (room.gameState && room.gameState.status === 'playing') {
+            const playerName = room.gameState.players[disconnectedPlayerIndex]?.name || 'Player';
+            const updatedState = handlePlayerResign(
+              room.gameState,
+              disconnectedPlayerIndex,
+              `${playerName} disconnected (forfeit).`
+            );
+            room.gameState = updatedState;
+            room.endedAt = Date.now();
+            io.to(code).emit('game:state_update', room.gameState);
+            log('PLAYER_FORFEIT_DISCONNECT', {
+              roomCode: code,
+              disconnectedPlayerIndex,
+              winner: room.gameState.winner,
+            });
+          }
         }
       }
     } catch (err) {

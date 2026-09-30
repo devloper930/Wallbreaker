@@ -25,11 +25,16 @@ import QuickPlayModal from './components/QuickPlayModal';
 import SettingsModal from './components/SettingsModal';
 import StatsAnalysisModal from './components/StatsAnalysisModal';
 import AuthModal from './components/AuthModal';
-import { Users, Copy, Check } from 'lucide-react';
+import LeaderboardModal from './components/LeaderboardModal';
+import LeaveGameModal from './components/LeaveGameModal';
+import { Users, Copy, Check, Handshake, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 export default function App() {
   // Navigation View: 'home' | 'game'
   const [view, setView] = useState('home');
+
+  // Leave Game Warning Modal State
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   // Player Profile & Elo
   const [userProfile, setUserProfile] = useState(() => getUserProfile());
@@ -98,16 +103,21 @@ export default function App() {
     localStorage.setItem('wallbreaker_piece_theme', 'gem');
   };
 
-  // UI Modals
-  const [showGameOverModal, setShowGameOverModal] = useState(false);
-  const [showRules, setShowRules] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showQuickPlay, setShowQuickPlay] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showStatsModal, setShowStatsModal] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  // Unified UI Modal State with HTML5 History & Back Button Support
+  // 'rules' | 'profile' | 'quickplay' | 'settings' | 'stats' | 'auth' | 'gameover' | 'leaderboard' | null
+  const [activeModal, setActiveModal] = useState(null);
   const [isBotThinking, setIsBotThinking] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Synchronous refs to prevent stale closures in popstate and background event listeners
+  const viewRef = useRef(view);
+  viewRef.current = view;
+
+  const activeModalRef = useRef(activeModal);
+  activeModalRef.current = activeModal;
+
+  const gameStateRef = useRef(gameState);
+  gameStateRef.current = gameState;
 
   // Ref to protect bot execution against timer cancellation
   const botThinkingRef = useRef(false);
@@ -120,6 +130,12 @@ export default function App() {
   const [onlinePlayerIndex, setOnlinePlayerIndex] = useState(null);
   const [onlineConnecting, setOnlineConnecting] = useState(false);
   const [onlineError, setOnlineError] = useState(null);
+
+  // In-Game Draw System State
+  const [drawPending, setDrawPending] = useState(false);
+  const [drawToast, setDrawToast] = useState(null); // { type: 'pending'|'accepted'|'declined', text: string }
+  const [incomingDrawOffer, setIncomingDrawOffer] = useState(null); // { fromPlayerIndex, playerName }
+  const [showLocalDrawConfirm, setShowLocalDrawConfirm] = useState(false);
 
   // Socket.io initialization
   useEffect(() => {
@@ -156,9 +172,90 @@ export default function App() {
       }, 3200);
     });
 
+    // Draw events for online room matches
+    s.on('game:draw_offered', ({ fromPlayerIndex, playerName }) => {
+      setIncomingDrawOffer({ fromPlayerIndex, playerName });
+      soundManager.playReaction();
+    });
+
+    s.on('game:draw_accepted', () => {
+      setDrawPending(false);
+      setIncomingDrawOffer(null);
+      setDrawToast({
+        type: 'accepted',
+        text: 'Draw accepted by mutual agreement!',
+      });
+      setTimeout(() => setDrawToast(null), 3000);
+    });
+
+    s.on('game:draw_declined', () => {
+      setDrawPending(false);
+      soundManager.playIllegal();
+      setDrawToast({
+        type: 'declined',
+        text: 'Opponent declined your draw offer.',
+      });
+      setTimeout(() => {
+        setDrawToast((curr) => (curr?.type === 'declined' ? null : curr));
+      }, 3500);
+    });
+
     return () => {
       s.disconnect();
     };
+  }, []);
+
+  // Modal open/close helpers with History API push/pop
+  const openModal = (modalName) => {
+    window.history.pushState({ type: 'modal', modal: modalName }, '');
+    setActiveModal(modalName);
+  };
+
+  const closeModal = () => {
+    setActiveModal(null);
+    if (window.history.state?.type === 'modal') {
+      window.history.replaceState({ type: viewRef.current }, '');
+    }
+  };
+
+  // Browser / Mobile Hardware Back Button Navigation Handler
+  useEffect(() => {
+    // Ensure initial entry is always cleanly set to 'home'
+    window.history.replaceState({ type: 'home' }, '');
+
+    const handlePopState = (event) => {
+      const state = event.state;
+
+      if (!state || state.type === 'home') {
+        // If an active game is currently in progress, intercept and warn the user
+        if (viewRef.current === 'game' && gameStateRef.current?.status === 'playing') {
+          // Re-push game state to prevent premature browser exit
+          window.history.pushState({ type: 'game' }, '');
+          setShowLeaveModal(true);
+          return;
+        }
+
+        // Returned to home root: close all modals and exit game if in-game
+        setActiveModal(null);
+        if (viewRef.current === 'game') {
+          handleNavigateHome(true);
+        }
+      } else if (state.type === 'game') {
+        // Returned to active game arena
+        setActiveModal(null);
+        // Critical Guard: NEVER transition to game view if currently on home!
+        // This stops closing a modal on home from launching into an unwanted bot match.
+        if (viewRef.current !== 'game') {
+          window.history.replaceState({ type: 'home' }, '');
+        }
+      } else if (state.type === 'modal') {
+        // Transitioned between modals (e.g. going back from Auth to Settings)
+        setActiveModal(state.modal);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   // Handle Quick Rage Reactions from user
@@ -224,11 +321,9 @@ export default function App() {
       } else if (e.key === 'f' || e.key === 'F') {
         setFlipped((prev) => !prev);
       } else if (e.key === 'Escape') {
-        setShowRules(false);
-        setShowProfileModal(false);
-        setShowQuickPlay(false);
-        setShowSettingsModal(false);
-        setShowStatsModal(false);
+        if (activeModalRef.current) {
+          closeModal();
+        }
       }
     };
 
@@ -312,7 +407,9 @@ export default function App() {
   // Handle Game End & Elo Rating Update (Strictly Play Online Ranked matches only)
   useEffect(() => {
     if (gameState.status === 'ended') {
-      setShowGameOverModal(true);
+      if (activeModalRef.current !== 'gameover') {
+        openModal('gameover');
+      }
 
       // In career stats ONLY include play online matches (both real human and simulated human opponents).
       // Do NOT include any other matches like vs computer, private room, or offline mode.
@@ -518,18 +615,23 @@ export default function App() {
       newState.players[3].botId = b3.id;
     }
 
+    if (window.history.state?.type !== 'game') {
+      window.history.pushState({ type: 'game' }, '');
+    }
+    setActiveModal(null);
     setGameMode(mode);
     setGameType('bot');
     setGameState(newState);
     setMatchRatingChange(null);
-    setShowGameOverModal(false);
     setFlipped(false);
     setView('game');
   };
 
   // Quick Play Match Found (Play Online: Real Player or AI Engine Portrayed as Real Player)
   const handleQuickPlayMatchFound = (matchData, config) => {
-    setShowQuickPlay(false);
+    // Transition history directly from matchmaking modal to game
+    window.history.replaceState({ type: 'game' }, '');
+    setActiveModal(null);
     hasRecordedMatchRef.current = false;
 
     const chosenMode = config?.mode || quickPlayConfig.mode || MODES.CLASSIC;
@@ -545,7 +647,6 @@ export default function App() {
       setOnlinePlayerIndex(matchData.playerIndex);
       setGameState(matchData.gameState);
       setMatchRatingChange(null);
-      setShowGameOverModal(false);
       if (chosenMode !== MODES.RACE && matchData.playerIndex === 1) {
         setFlipped(true);
       } else {
@@ -608,7 +709,6 @@ export default function App() {
     setOnlinePlayerIndex(0);
     setGameState(newState);
     setMatchRatingChange(null);
-    setShowGameOverModal(false);
     setFlipped(false);
     setView('game');
   };
@@ -626,11 +726,14 @@ export default function App() {
     setMatchedOpponent(null);
     setOnlineRoomCode(null);
     hasRecordedMatchRef.current = false;
+    if (window.history.state?.type !== 'game') {
+      window.history.pushState({ type: 'game' }, '');
+    }
+    setActiveModal(null);
     setGameMode(mode);
     setGameType('local');
     setGameState(newState);
     setMatchRatingChange(null);
-    setShowGameOverModal(false);
     setFlipped(false);
     setView('game');
   };
@@ -646,6 +749,10 @@ export default function App() {
     socket.emit('room:create', { mode, timeControlKey, boardSize, playerName: `${userProfile.name} (${userProfile.rating})` }, (res) => {
       setOnlineConnecting(false);
       if (res.success) {
+        if (window.history.state?.type !== 'game') {
+          window.history.pushState({ type: 'game' }, '');
+        }
+        setActiveModal(null);
         setMatchedOpponent(null);
         hasRecordedMatchRef.current = false;
         setGameMode(mode);
@@ -654,7 +761,6 @@ export default function App() {
         setOnlineRoomCode(res.roomCode);
         setOnlinePlayerIndex(res.playerIndex);
         setMatchRatingChange(null);
-        setShowGameOverModal(false);
         setView('game');
       } else {
         setOnlineError(res.error || 'Failed to create room');
@@ -673,6 +779,10 @@ export default function App() {
     socket.emit('room:join', { roomCode, playerName: `${userProfile.name} (${userProfile.rating})` }, (res) => {
       setOnlineConnecting(false);
       if (res.success) {
+        if (window.history.state?.type !== 'game') {
+          window.history.pushState({ type: 'game' }, '');
+        }
+        setActiveModal(null);
         setMatchedOpponent(null);
         hasRecordedMatchRef.current = false;
         setGameMode(res.gameState.mode);
@@ -681,7 +791,6 @@ export default function App() {
         setOnlineRoomCode(res.roomCode);
         setOnlinePlayerIndex(res.playerIndex);
         setMatchRatingChange(null);
-        setShowGameOverModal(false);
         // In Race Mode both players race in same direction, never flip perspective
         if (res.gameState.mode !== MODES.RACE && res.playerIndex === 1) {
           setFlipped(true);
@@ -695,14 +804,80 @@ export default function App() {
     });
   };
 
-  // Navigate to Home Page (completely closes game over modal and returns to main view)
-  const handleNavigateHome = () => {
-    setShowGameOverModal(false);
+  // Request Navigate Home (shows warning popup if match in progress)
+  const requestNavigateHome = () => {
+    if (view === 'game' && gameState.status === 'playing') {
+      setShowLeaveModal(true);
+    } else {
+      handleNavigateHome();
+    }
+  };
+
+  const handleCancelLeaveGame = () => {
+    setShowLeaveModal(false);
+    if (window.history.state?.type !== 'game') {
+      window.history.pushState({ type: 'game' }, '');
+    }
+  };
+
+  const handleConfirmLeaveGame = () => {
+    setShowLeaveModal(false);
+
+    // If leaving an active match in Play Online mode, treat as an immediate forfeit (loss)
+    if (gameState.status === 'playing') {
+      const isPlayOnlineMatch = gameType === 'online' && Boolean(matchedOpponent);
+      if (isPlayOnlineMatch && !hasRecordedMatchRef.current) {
+        hasRecordedMatchRef.current = true;
+        try {
+          const oppRating = matchedOpponent.rating;
+          const oppName = matchedOpponent.name;
+          const oppAvatar = matchedOpponent.avatar;
+
+          // Forfeit -> score = 0 (loss)
+          const eloResult = calculateEloChange(userProfile.rating, oppRating, 0);
+          const change = eloResult.change;
+          setMatchRatingChange(change);
+
+          const updated = recordMatchResult(false, true, change, {
+            matchType: 'online',
+            opponent: oppName,
+            opponentRating: oppRating,
+            opponentAvatar: oppAvatar,
+            mode: gameMode === MODES.CLASSIC ? 'Classic Barricade' : gameMode === MODES.RACE ? 'Race Mode' : 'Quad Compete',
+            movesCount: gameState.history ? gameState.history.length : 0,
+            history: gameState.history || [],
+            winReason: 'Forfeited / Abandoned match',
+          });
+          setUserProfile(updated);
+        } catch (err) {
+          console.error('Error recording match forfeit:', err);
+        }
+
+        if (onlineRoomCode && socket) {
+          socket.emit('game:resign', {
+            roomCode: onlineRoomCode,
+            playerIndex: onlinePlayerIndex,
+          });
+        }
+      }
+    }
+
+    handleNavigateHome(true);
+  };
+
+  // Navigate to Home Page (closes all modals and returns to main view with history synchronization)
+  const handleNavigateHome = (fromPopState = false) => {
+    setActiveModal(null);
     setMatchRatingChange(null);
     setMatchedOpponent(null);
+    setDrawPending(false);
+    setDrawToast(null);
+    setIncomingDrawOffer(null);
+    setShowLocalDrawConfirm(false);
     hasRecordedMatchRef.current = false;
     setView('home');
     setGameState(createInitialGameState(gameMode));
+    window.history.replaceState({ type: 'home' }, '');
   };
 
   // Sign out handler
@@ -735,9 +910,79 @@ export default function App() {
     }
   };
 
-  // Draw Offer
+  // Draw Offer System
   const handleOfferDraw = () => {
-    if (gameState.status !== 'playing') return;
+    if (gameState.status !== 'playing' || drawPending) return;
+
+    // 1. Online Real Room with Socket
+    if (gameType === 'online' && onlineRoomCode) {
+      if (socket) {
+        setDrawPending(true);
+        setDrawToast({
+          type: 'pending',
+          text: 'Draw offer sent to opponent... waiting for response.',
+        });
+        socket.emit('game:draw_offer', {
+          roomCode: onlineRoomCode,
+          fromPlayerIndex: onlinePlayerIndex,
+          playerName: userProfile?.name || 'Player',
+        });
+      }
+      return;
+    }
+
+    // 2. Local Pass & Play Mode
+    if (gameType === 'local') {
+      setShowLocalDrawConfirm(true);
+      return;
+    }
+
+    // 3. Play Online with AI Human Personas OR Vs Computer Bots
+    const oppName = matchedOpponent?.name || currentBot?.name || 'Opponent';
+    setDrawPending(true);
+    setDrawToast({
+      type: 'pending',
+      text: `Draw offer sent to ${oppName}... waiting for response.`,
+    });
+
+    // Realistic human deliberation delay (1.4s to 2.2s)
+    const deliberationTime = 1400 + Math.floor(Math.random() * 800);
+
+    setTimeout(() => {
+      // 30% chance of acceptance, 70% chance of rejection
+      const isAccepted = Math.random() < 0.30;
+
+      if (isAccepted) {
+        setDrawPending(false);
+        setDrawToast({
+          type: 'accepted',
+          text: `${oppName} accepted the draw offer!`,
+        });
+        setTimeout(() => {
+          setGameState((prev) => ({
+            ...prev,
+            status: 'ended',
+            winner: null,
+            winReason: 'Game drawn by mutual agreement.',
+          }));
+          setDrawToast(null);
+        }, 600);
+      } else {
+        setDrawPending(false);
+        soundManager.playIllegal();
+        setDrawToast({
+          type: 'declined',
+          text: `${oppName} declined the draw offer.`,
+        });
+        setTimeout(() => {
+          setDrawToast((curr) => (curr?.type === 'declined' ? null : curr));
+        }, 3500);
+      }
+    }, deliberationTime);
+  };
+
+  const handleConfirmLocalDraw = () => {
+    setShowLocalDrawConfirm(false);
     setGameState((prev) => ({
       ...prev,
       status: 'ended',
@@ -746,10 +991,26 @@ export default function App() {
     }));
   };
 
+  const handleAcceptIncomingDraw = () => {
+    if (!socket || !onlineRoomCode) return;
+    socket.emit('game:draw_accept', { roomCode: onlineRoomCode });
+    setIncomingDrawOffer(null);
+  };
+
+  const handleDeclineIncomingDraw = () => {
+    if (!socket || !onlineRoomCode) return;
+    socket.emit('game:draw_decline', { roomCode: onlineRoomCode });
+    setIncomingDrawOffer(null);
+  };
+
   // Rematch
   const handleRematch = () => {
-    setShowGameOverModal(false);
+    closeModal();
     setMatchRatingChange(null);
+    setDrawPending(false);
+    setDrawToast(null);
+    setIncomingDrawOffer(null);
+    setShowLocalDrawConfirm(false);
     hasRecordedMatchRef.current = false;
     if (gameType === 'online' && onlineRoomCode) {
       if (socket) {
@@ -814,11 +1075,17 @@ export default function App() {
         isMuted={isMuted}
         setIsMuted={setIsMuted}
         userProfile={userProfile}
-        onNavigateHome={handleNavigateHome}
-        onQuickPlay={() => setShowQuickPlay(true)}
-        onOpenProfile={() => setShowProfileModal(true)}
-        onOpenRules={() => setShowRules(true)}
-        onOpenSettings={() => setShowSettingsModal(true)}
+        onNavigateHome={requestNavigateHome}
+        onQuickPlay={() => {
+          if (view === 'game' && gameState.status === 'playing') {
+            setShowLeaveModal(true);
+          } else {
+            openModal('quickplay');
+          }
+        }}
+        onOpenProfile={() => openModal('profile')}
+        onOpenRules={() => openModal('rules')}
+        onOpenSettings={() => openModal('settings')}
         roomCode={onlineRoomCode}
       />
 
@@ -835,20 +1102,21 @@ export default function App() {
             onJoinOnlineRoom={handleJoinOnlineRoom}
             onQuickPlay={(config) => {
               if (config) setQuickPlayConfig(config);
-              setShowQuickPlay(true);
+              openModal('quickplay');
             }}
-            onOpenProfile={() => setShowProfileModal(true)}
-            onOpenStatsAnalysis={() => setShowStatsModal(true)}
+            onOpenProfile={() => openModal('profile')}
+            onOpenStatsAnalysis={() => openModal('stats')}
             onlineConnecting={onlineConnecting}
             onlineError={onlineError}
-            onOpenRules={() => setShowRules(true)}
+            onOpenRules={() => openModal('rules')}
+            onOpenLeaderboard={() => openModal('leaderboard')}
           />
         </main>
       ) : (
         /* GAME ARENA VIEW */
-        <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 animate-in fade-in duration-150">
+        <main className="flex-1 w-full max-w-7xl mx-auto px-0.5 sm:px-6 py-1 sm:py-4 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-2 sm:gap-6 animate-in fade-in duration-150">
           {/* Left / Center: Board & Player Panels */}
-          <div className="w-full max-w-[560px] sm:max-w-[600px] flex flex-col gap-3">
+          <div className="w-full max-w-full sm:max-w-[600px] flex flex-col gap-1.5 sm:gap-3">
             {/* Top Player Card (Opponent or Bot) */}
             <div className="w-full">
               <PlayerCard
@@ -921,6 +1189,94 @@ export default function App() {
               </div>
             )}
 
+            {/* In-Game Draw Offer Feedback Toast */}
+            {drawToast && (
+              <div
+                className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs shadow-lg animate-in fade-in duration-200 ${
+                  drawToast.type === 'accepted'
+                    ? 'bg-emerald-950/90 border-emerald-600 text-emerald-200'
+                    : drawToast.type === 'declined'
+                    ? 'bg-rose-950/90 border-rose-600 text-rose-200'
+                    : 'bg-sky-950/90 border-sky-600 text-sky-200'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {drawToast.type === 'accepted' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : drawToast.type === 'declined' ? (
+                    <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  ) : (
+                    <Loader2 className="w-4 h-4 text-sky-400 animate-spin shrink-0" />
+                  )}
+                  <span className="font-semibold">{drawToast.text}</span>
+                </div>
+                {drawToast.type !== 'pending' && (
+                  <button
+                    onClick={() => setDrawToast(null)}
+                    className="text-[#9e9c98] hover:text-white text-xs px-1.5 py-0.5 rounded"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Incoming Draw Offer from Room Opponent */}
+            {incomingDrawOffer && (
+              <div className="p-3 bg-[#262421] border-2 border-sky-500 rounded-xl shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center gap-2.5">
+                  <Handshake className="w-5 h-5 text-sky-400 shrink-0" />
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-white">Draw Offered</p>
+                    <p className="text-[11px] text-[#9e9c98]">
+                      {incomingDrawOffer.playerName || 'Opponent'} offered a draw. Accept?
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <button
+                    onClick={handleAcceptIncomingDraw}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow transition-all active:scale-95"
+                  >
+                    Accept Draw
+                  </button>
+                  <button
+                    onClick={handleDeclineIncomingDraw}
+                    className="px-3 py-1.5 bg-[#3c3934] hover:bg-[#4d4942] text-white font-semibold text-xs rounded-lg transition-all active:scale-95"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Pass & Play Local Mutual Draw Confirmation Dialog */}
+            {showLocalDrawConfirm && (
+              <div className="p-3 bg-[#262421] border-2 border-amber-500 rounded-xl shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center gap-2.5">
+                  <Handshake className="w-5 h-5 text-amber-400 shrink-0" />
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-white">Mutual Draw Offer</p>
+                    <p className="text-[11px] text-[#9e9c98]">Do both players agree to end the game in a draw?</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <button
+                    onClick={handleConfirmLocalDraw}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow transition-all active:scale-95"
+                  >
+                    Confirm Draw
+                  </button>
+                  <button
+                    onClick={() => setShowLocalDrawConfirm(false)}
+                    className="px-3 py-1.5 bg-[#3c3934] hover:bg-[#4d4942] text-white font-semibold text-xs rounded-lg transition-all active:scale-95"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* The Board */}
             <Board
               gameState={gameState}
@@ -989,8 +1345,9 @@ export default function App() {
               onFlipBoard={() => setFlipped(prev => !prev)}
               flipped={flipped}
               wallsLeft={gameState.players[gameState.turn]?.wallsLeft || 0}
-              canResign={gameType !== 'bot'}
-              canDraw={gameMode !== MODES.QUAD}
+              canResign={gameState.status === 'playing'}
+              canDraw={!drawPending && gameState.status === 'playing'}
+              isDrawPending={drawPending}
               status={gameState.status}
               confirmResign={confirmResign}
             />
@@ -1015,9 +1372,9 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Modals */}
+      {/* Modals with Unified Browser History and Back Support */}
       <GameOverModal
-        isOpen={view === 'game' && gameState.status === 'ended' && showGameOverModal}
+        isOpen={view === 'game' && gameState.status === 'ended' && activeModal === 'gameover'}
         winner={gameState.winner}
         winReason={gameState.winReason}
         gameState={gameState}
@@ -1027,18 +1384,18 @@ export default function App() {
         onNewGame={handleNavigateHome}
       />
 
-      <RulesModal isOpen={showRules} onClose={() => setShowRules(false)} />
+      <RulesModal isOpen={activeModal === 'rules'} onClose={closeModal} />
 
       <ProfileModal
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
+        isOpen={activeModal === 'profile'}
+        onClose={closeModal}
         profile={userProfile}
         onProfileUpdated={(updated) => setUserProfile(updated)}
       />
 
       <QuickPlayModal
-        isOpen={showQuickPlay}
-        onClose={() => setShowQuickPlay(false)}
+        isOpen={activeModal === 'quickplay'}
+        onClose={closeModal}
         userProfile={userProfile}
         onMatchFound={handleQuickPlayMatchFound}
         socket={socket}
@@ -1048,8 +1405,8 @@ export default function App() {
       />
 
       <SettingsModal
-        isOpen={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
+        isOpen={activeModal === 'settings'}
+        onClose={closeModal}
         showCoords={showCoords}
         setShowCoords={setShowCoords}
         isMuted={isMuted}
@@ -1063,14 +1420,14 @@ export default function App() {
         pieceTheme={pieceTheme}
         setPieceTheme={setPieceTheme}
         userProfile={userProfile}
-        onOpenAuthModal={() => setShowAuthModal(true)}
+        onOpenAuthModal={() => openModal('auth')}
         onSignOut={handleSignOut}
         onResetDefaults={handleResetDefaults}
       />
 
       <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
+        isOpen={activeModal === 'auth'}
+        onClose={closeModal}
         userProfile={userProfile}
         onLoginSuccess={(updated) => {
           setUserProfile(updated);
@@ -1079,11 +1436,25 @@ export default function App() {
       />
 
       <StatsAnalysisModal
-        isOpen={showStatsModal}
-        onClose={() => setShowStatsModal(false)}
+        isOpen={activeModal === 'stats'}
+        onClose={closeModal}
         userProfile={userProfile}
         pieceTheme={pieceTheme}
         boardTheme={theme}
+      />
+
+      <LeaderboardModal
+        isOpen={activeModal === 'leaderboard'}
+        onClose={closeModal}
+        userProfile={userProfile}
+      />
+
+      {/* Leave In-Progress Game Forfeit Warning Confirmation Modal */}
+      <LeaveGameModal
+        isOpen={showLeaveModal}
+        onClose={handleCancelLeaveGame}
+        onConfirmLeave={handleConfirmLeaveGame}
+        isRankedOnline={gameType === 'online' && Boolean(matchedOpponent)}
       />
     </div>
   );

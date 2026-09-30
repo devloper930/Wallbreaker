@@ -77,6 +77,62 @@ export default function PlayerCard({
     window.__draggedWallOrientation = null;
   };
 
+  // Mobile Touch Drag-and-Drop Handlers
+  const handleWallTouchStart = (e, orientation) => {
+    if (isFrozen || !isActive || !isMyTurn) return;
+    if (e.cancelable) e.preventDefault();
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+    }
+    if (onSelectWallOrientation) onSelectWallOrientation(orientation);
+    window.__draggedWallOrientation = orientation;
+    const touch = e.touches[0];
+    window.__activeTouchClient = { x: touch.clientX, y: touch.clientY };
+    window.dispatchEvent(
+      new CustomEvent('boardWallTouchStart', {
+        detail: { orientation, clientX: touch.clientX, clientY: touch.clientY },
+      })
+    );
+  };
+
+  const handleWallTouchMove = (e) => {
+    if (!window.__draggedWallOrientation) return;
+    if (e.cancelable) e.preventDefault();
+    const touch = e.touches[0];
+    window.__activeTouchClient = { x: touch.clientX, y: touch.clientY };
+    window.dispatchEvent(
+      new CustomEvent('boardWallTouchMove', {
+        detail: {
+          orientation: window.__draggedWallOrientation,
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+        },
+      })
+    );
+  };
+
+  const handleWallTouchEnd = (e) => {
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    }
+    if (!window.__draggedWallOrientation) return;
+    if (e.cancelable) e.preventDefault();
+    const touch = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0] : (window.__activeTouchClient || {});
+    window.dispatchEvent(
+      new CustomEvent('boardWallTouchEnd', {
+        detail: {
+          orientation: window.__draggedWallOrientation,
+          clientX: touch.clientX || (window.__activeTouchClient ? window.__activeTouchClient.x : 0),
+          clientY: touch.clientY || (window.__activeTouchClient ? window.__activeTouchClient.y : 0),
+        },
+      })
+    );
+    window.__draggedWallOrientation = null;
+    window.__activeTouchClient = null;
+  };
+
   return (
     <div
       className={`rounded-xl transition-all duration-200 select-none ${
@@ -85,19 +141,19 @@ export default function PlayerCard({
           : isActive
           ? 'bg-[#272522] border-2 shadow-lg'
           : 'bg-[#21201d] border border-[#3c3934]'
-      } ${compact ? 'p-2' : 'p-3'}`}
+      } ${compact ? 'p-1.5 sm:p-2' : 'p-2 sm:p-3'}`}
       style={{
         borderColor: !isFrozen && isActive ? playerStyle.color : undefined,
         boxShadow: !isFrozen && isActive ? `0 0 16px ${playerStyle.wallGlow}` : undefined,
       }}
     >
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-1.5 sm:gap-3">
         {/* Left: Avatar & Info */}
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
           <div className="relative flex-shrink-0">
             {/* Pawn avatar circle */}
             <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-black shadow-md border-2 text-xl ${
+              className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-black shadow-md border-2 text-lg sm:text-xl ${
                 isFrozen ? 'border-cyan-400/80' : ''
               }`}
               style={{
@@ -110,57 +166,57 @@ export default function PlayerCard({
               ) : playerStyle.icon ? (
                 <span className="text-white drop-shadow">{playerStyle.icon}</span>
               ) : isBot ? (
-                <Bot className="w-5 h-5 text-gray-900" />
+                <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-gray-900" />
               ) : (
-                <User className="w-5 h-5 text-gray-900" />
+                <User className="w-4 h-4 sm:w-5 sm:h-5 text-gray-900" />
               )}
             </div>
 
             {/* Frozen indicator badge or active turn indicator dot */}
             {isFrozen ? (
-              <span className="absolute -bottom-1 -right-1 text-[10px] bg-cyan-950 border border-cyan-400 rounded-full px-1 shadow">
+              <span className="absolute -bottom-1 -right-1 text-[9px] sm:text-[10px] bg-cyan-950 border border-cyan-400 rounded-full px-1 shadow">
                 ❄️
               </span>
             ) : isActive && (
               <span
-                className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#21201d] animate-pulse"
+                className="absolute -bottom-0.5 -right-0.5 w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full border-2 border-[#21201d] animate-pulse"
                 style={{ backgroundColor: playerStyle.color }}
               />
             )}
           </div>
 
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-bold text-white truncate max-w-[120px]">
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+              <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[100px] xs:max-w-[140px]">
                 {player?.name || 'Player'}
               </span>
               {player?.country && (
-                <span className="text-xs" title={`Country: ${player.country}`}>{player.country}</span>
+                <span className="text-xs sm:text-sm" title={`Country: ${player.country}`}>{player.country}</span>
               )}
               {player?.title && !isBot && !isFrozen && (
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-600/50">
+                <span className="text-[10px] sm:text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-600/50">
                   {player.title}
                 </span>
               )}
               {isFrozen && (
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60">
+                <span className="text-[10px] sm:text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60">
                   FROZEN
                 </span>
               )}
               {isSelf && !isFrozen && (
                 <span
-                  className="text-[9px] font-semibold px-1 rounded uppercase"
+                  className="text-[10px] sm:text-xs font-semibold px-1.5 py-0.2 rounded uppercase"
                   style={{ backgroundColor: '#3c3934', color: playerStyle.color }}
                 >
                   YOU
                 </span>
               )}
               {isBot && !isFrozen && (
-                <span className="text-[9px] font-semibold bg-[#3c3934] text-[#38bdf8] px-1 rounded uppercase">
+                <span className="text-[10px] sm:text-xs font-semibold bg-[#3c3934] text-[#38bdf8] px-1.5 py-0.2 rounded uppercase">
                   BOT
                 </span>
               )}
-              <span className="text-[10px] text-[#666461] font-mono">({rating})</span>
+              <span className="text-xs text-amber-400 font-mono font-bold">({rating})</span>
             </div>
 
             {/* Wall count & Goal indicator */}
@@ -168,17 +224,17 @@ export default function PlayerCard({
               {/* Wall slots visual */}
               <div className="flex items-center gap-0.5" title={`${wallsCount} walls left`}>
                 <span
-                  className="text-[11px] font-mono font-semibold mr-1 flex items-center gap-0.5"
+                  className="text-xs font-mono font-bold mr-1 flex items-center gap-0.5"
                   style={{ color: playerStyle.color }}
                 >
-                  <Shield className="w-3 h-3" />
+                  <Shield className="w-3.5 h-3.5" />
                   {wallsCount}
                 </span>
                 <div className="hidden sm:flex items-center gap-0.5">
                   {wallSlots.map((hasWall, idx) => (
                     <div
                       key={idx}
-                      className="w-1 h-3 rounded-[1px] transition-colors"
+                      className="w-1.5 h-3 rounded-[1px] transition-colors"
                       style={{
                         backgroundColor: hasWall ? playerStyle.color : '#3c3934',
                         boxShadow: hasWall ? `0 0 3px ${playerStyle.wallGlow}` : undefined,
@@ -188,8 +244,8 @@ export default function PlayerCard({
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 text-[11px] bg-[#2b2926] px-1.5 py-0.5 rounded border border-[#3c3934]/60">
-                <span className="text-[#9e9c98] text-[10px]">GOAL:</span>
+              <div className="flex items-center gap-1 text-xs bg-[#2b2926] px-2 py-0.5 rounded border border-[#3c3934]/60 font-semibold">
+                <span className="text-[#9e9c98] text-[11px]">GOAL:</span>
                 {renderGoalArrow()}
               </div>
             </div>
@@ -199,7 +255,7 @@ export default function PlayerCard({
         {/* Center: Two Sleek Circular Wall Buttons (Horizontal & Vertical) */}
         {showWallButtons && wallsCount > 0 && (
           <div
-            className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 rounded-2xl bg-[#1b1a17]/90 border border-[#3c3934] shadow-inner transition-all duration-150 ${
+            className={`flex items-center gap-1 sm:gap-2 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-2xl bg-[#1b1a17]/90 border border-[#3c3934] shadow-inner transition-all duration-150 ${
               isActive && isMyTurn ? 'opacity-100 ring-1 ring-white/10' : 'opacity-40 pointer-events-none'
             }`}
           >
@@ -212,14 +268,19 @@ export default function PlayerCard({
               draggable={isActive && isMyTurn}
               onDragStart={(e) => handleWallDragStart(e, 'h')}
               onDragEnd={handleWallDragEnd}
+              onTouchStart={(e) => handleWallTouchStart(e, 'h')}
+              onTouchMove={handleWallTouchMove}
+              onTouchEnd={handleWallTouchEnd}
+              onTouchCancel={handleWallTouchEnd}
               onClick={() => onSelectWallOrientation && onSelectWallOrientation('h')}
-              title="Horizontal Wall [ ── ] (Click & Drag onto board, or tap to place)"
-              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full flex flex-col items-center justify-center cursor-grab active:cursor-grabbing transition-all select-none ${
+              title="Horizontal Wall [ ── ] (Drag onto board or tap to select)"
+              className={`relative w-9 h-9 sm:w-11 sm:h-11 rounded-full flex flex-col items-center justify-center cursor-grab active:cursor-grabbing transition-all select-none touch-none ${
                 activeWallOrientation === 'h' && isActive
                   ? 'scale-105 shadow-md'
                   : 'hover:scale-105 hover:border-white/40'
               }`}
               style={{
+                touchAction: 'none',
                 backgroundColor: activeWallOrientation === 'h' ? '#2b2926' : '#21201d',
                 border: `2px solid ${activeWallOrientation === 'h' && isActive ? playerStyle.color : '#3c3934'}`,
                 boxShadow: activeWallOrientation === 'h' && isActive ? `0 0 12px ${playerStyle.wallGlow}` : undefined,
@@ -227,13 +288,13 @@ export default function PlayerCard({
             >
               {/* Horizontal Wall Bar Icon */}
               <div
-                className="w-5 sm:w-6 h-1.5 rounded-[2px] shadow-sm transition-transform pointer-events-none"
+                className="w-5 sm:w-6 h-1.5 sm:h-2 rounded-[2px] shadow-sm transition-transform pointer-events-none"
                 style={{
                   backgroundImage: playerStyle.wallGradientH,
                   border: `1px solid ${playerStyle.wallBorder}`,
                 }}
               />
-              <span className="text-[8px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
+              <span className="text-[9px] sm:text-[10px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
                 ──
               </span>
             </div>
@@ -243,14 +304,19 @@ export default function PlayerCard({
               draggable={isActive && isMyTurn}
               onDragStart={(e) => handleWallDragStart(e, 'v')}
               onDragEnd={handleWallDragEnd}
+              onTouchStart={(e) => handleWallTouchStart(e, 'v')}
+              onTouchMove={handleWallTouchMove}
+              onTouchEnd={handleWallTouchEnd}
+              onTouchCancel={handleWallTouchEnd}
               onClick={() => onSelectWallOrientation && onSelectWallOrientation('v')}
-              title="Vertical Wall [ │ ] (Click & Drag onto board, or tap to place)"
-              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full flex flex-col items-center justify-center cursor-grab active:cursor-grabbing transition-all select-none ${
+              title="Vertical Wall [ │ ] (Drag onto board or tap to select)"
+              className={`relative w-9 h-9 sm:w-11 sm:h-11 rounded-full flex flex-col items-center justify-center cursor-grab active:cursor-grabbing transition-all select-none touch-none ${
                 activeWallOrientation === 'v' && isActive
                   ? 'scale-105 shadow-md'
                   : 'hover:scale-105 hover:border-white/40'
               }`}
               style={{
+                touchAction: 'none',
                 backgroundColor: activeWallOrientation === 'v' ? '#2b2926' : '#21201d',
                 border: `2px solid ${activeWallOrientation === 'v' && isActive ? playerStyle.color : '#3c3934'}`,
                 boxShadow: activeWallOrientation === 'v' && isActive ? `0 0 12px ${playerStyle.wallGlow}` : undefined,
@@ -258,13 +324,13 @@ export default function PlayerCard({
             >
               {/* Vertical Wall Bar Icon */}
               <div
-                className="w-1.5 h-4 sm:h-5 rounded-[2px] shadow-sm transition-transform pointer-events-none"
+                className="w-1.5 sm:w-2 h-4 sm:h-6 rounded-[2px] shadow-sm transition-transform pointer-events-none"
                 style={{
                   backgroundImage: playerStyle.wallGradientV,
                   border: `1px solid ${playerStyle.wallBorder}`,
                 }}
               />
-              <span className="text-[8px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
+              <span className="text-[9px] sm:text-[10px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
                 │
               </span>
             </div>
@@ -281,7 +347,7 @@ export default function PlayerCard({
         {/* Right: Digital Chess Clock */}
         {hasTimer && (
           <div
-            className={`flex-shrink-0 px-3 py-1.5 rounded-md font-mono font-bold text-base md:text-lg flex items-center gap-1.5 transition-all ${
+            className={`flex-shrink-0 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md font-mono font-extrabold text-base sm:text-lg md:text-xl flex items-center gap-1 sm:gap-1.5 transition-all ${
               isActive
                 ? isLowTime
                   ? 'bg-red-950/80 text-red-400 border border-red-500 animate-pulse'
@@ -289,7 +355,7 @@ export default function PlayerCard({
                 : 'bg-[#1b1a17] text-[#9e9c98] border border-[#3c3934]'
             }`}
           >
-            <Clock className={`w-3.5 h-3.5 ${isActive ? 'text-[#81b64c]' : 'text-[#666461]'}`} />
+            <Clock className={`w-3.5 sm:w-4 h-3.5 sm:h-4 ${isActive ? 'text-[#81b64c]' : 'text-[#666461]'}`} />
             <span>{formatTime(timer)}</span>
           </div>
         )}
