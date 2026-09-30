@@ -488,23 +488,10 @@ export default function Board({
                     gridColumn: `${startCol} / span 3`,
                     backgroundColor: wallPlayerStyle.color,
                     backgroundImage: wallPlayerStyle.wallGradientH,
-                    borderColor: wallPlayerStyle.wallBorder,
-                    boxShadow: `0 5px 12px rgba(0, 0, 0, 0.75), 0 0 16px ${wallPlayerStyle.wallGlow}`,
+                    boxShadow: `0 3px 6px rgba(0, 0, 0, 0.65), 0 0 10px ${wallPlayerStyle.wallGlow}`,
                   }}
-                  className="z-20 rounded-[4px] wall-3d-h border wall-anim-slam pointer-events-none transition-all relative overflow-hidden"
-                >
-                  {/* Specular Top Chamfer Highlight */}
-                  <div className="absolute inset-x-0 top-0 h-[40%] bg-gradient-to-b from-white/50 via-white/10 to-transparent pointer-events-none rounded-t-[3px]" />
-                  {/* Subtle Bottom Ambient Shadow */}
-                  <div className="absolute inset-x-0 bottom-0 h-[30%] bg-black/45 pointer-events-none rounded-b-[3px]" />
-                  {/* Left & Right End Caps */}
-                  <div className="absolute inset-y-0 left-0 w-1 bg-white/35 pointer-events-none rounded-l-[3px]" />
-                  <div className="absolute inset-y-0 right-0 w-1 bg-black/50 pointer-events-none rounded-r-[3px]" />
-                  {/* Center Intersection Rivet / Fastener Pin */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-[80%] rounded-[2px] bg-black/50 border-x border-white/40 pointer-events-none flex items-center justify-center shadow-inner">
-                    <div className="w-1 h-1 rounded-full bg-white/80 shadow-xs" />
-                  </div>
-                </div>
+                  className="z-20 wall-3d-h wall-anim-slam pointer-events-none transition-all"
+                />
               );
             } else {
               const startRow = visualR * 2 + 1;
@@ -518,23 +505,10 @@ export default function Board({
                     gridColumn: `${startCol} / span 1`,
                     backgroundColor: wallPlayerStyle.color,
                     backgroundImage: wallPlayerStyle.wallGradientV,
-                    borderColor: wallPlayerStyle.wallBorder,
-                    boxShadow: `5px 0 12px rgba(0, 0, 0, 0.75), 0 0 16px ${wallPlayerStyle.wallGlow}`,
+                    boxShadow: `3px 0 6px rgba(0, 0, 0, 0.65), 0 0 10px ${wallPlayerStyle.wallGlow}`,
                   }}
-                  className="z-20 rounded-[4px] wall-3d-v border wall-anim-slam pointer-events-none transition-all relative overflow-hidden"
-                >
-                  {/* Specular Left Chamfer Highlight */}
-                  <div className="absolute inset-y-0 left-0 w-[40%] bg-gradient-to-r from-white/50 via-white/10 to-transparent pointer-events-none rounded-l-[3px]" />
-                  {/* Subtle Right Ambient Shadow */}
-                  <div className="absolute inset-y-0 right-0 w-[30%] bg-black/45 pointer-events-none rounded-r-[3px]" />
-                  {/* Top & Bottom End Caps */}
-                  <div className="absolute inset-x-0 top-0 h-1 bg-white/35 pointer-events-none rounded-t-[3px]" />
-                  <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50 pointer-events-none rounded-b-[3px]" />
-                  {/* Center Intersection Rivet / Fastener Pin */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-2.5 w-[80%] rounded-[2px] bg-black/50 border-y border-white/40 pointer-events-none flex items-center justify-center shadow-inner">
-                    <div className="w-1 h-1 rounded-full bg-white/80 shadow-xs" />
-                  </div>
-                </div>
+                  className="z-20 wall-3d-v wall-anim-slam pointer-events-none transition-all"
+                />
               );
             }
           })}
@@ -555,17 +529,13 @@ export default function Board({
                       gridRow: `${startRow} / span 1`,
                       gridColumn: `${startCol} / span 3`,
                       backgroundImage: hoveredWall.isValid ? currentPStyle.wallGradientH : undefined,
-                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.9)',
-                      borderColor: hoveredWall.isValid ? '#ffffff' : '#fca5a5',
+                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.85)',
                       boxShadow: hoveredWall.isValid
-                        ? `0 0 22px ${currentPStyle.wallGlow}, 0 0 10px #ffffff`
-                        : '0 0 20px rgba(239, 68, 68, 0.95)',
+                        ? `0 0 16px ${currentPStyle.wallGlow}`
+                        : '0 0 16px rgba(239, 68, 68, 0.9)',
                     }}
-                    className="z-30 rounded-[4px] wall-3d-h pointer-events-none transition-all duration-75 border-2 animate-pulse relative overflow-hidden"
-                  >
-                    <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/60 to-transparent pointer-events-none" />
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-[80%] rounded-[2px] bg-black/35 border-x border-white/60 pointer-events-none" />
-                  </div>
+                    className="z-30 wall-3d-h pointer-events-none transition-all duration-75 animate-pulse"
+                  />
                 );
               } else {
                 const startRow = visualR * 2 + 1;
@@ -577,17 +547,13 @@ export default function Board({
                       gridRow: `${startRow} / span 3`,
                       gridColumn: `${startCol} / span 1`,
                       backgroundImage: hoveredWall.isValid ? currentPStyle.wallGradientV : undefined,
-                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.9)',
-                      borderColor: hoveredWall.isValid ? '#ffffff' : '#fca5a5',
+                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.85)',
                       boxShadow: hoveredWall.isValid
-                        ? `0 0 22px ${currentPStyle.wallGlow}, 0 0 10px #ffffff`
-                        : '0 0 20px rgba(239, 68, 68, 0.95)',
+                        ? `0 0 16px ${currentPStyle.wallGlow}`
+                        : '0 0 16px rgba(239, 68, 68, 0.9)',
                     }}
-                    className="z-30 rounded-[4px] wall-3d-v pointer-events-none transition-all duration-75 border-2 animate-pulse relative overflow-hidden"
-                  >
-                    <div className="absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-white/60 to-transparent pointer-events-none" />
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-2.5 w-[80%] rounded-[2px] bg-black/35 border-y border-white/60 pointer-events-none" />
-                  </div>
+                    className="z-30 wall-3d-v pointer-events-none transition-all duration-75 animate-pulse"
+                  />
                 );
               }
             })()
@@ -685,29 +651,17 @@ export default function Board({
           }}
         >
           <div
-            className={`rounded-[4px] shadow-2xl border-2 border-white relative overflow-hidden ${
-              touchGhost.orientation === 'h' ? 'w-24 h-5 wall-3d-h' : 'w-5 h-24 wall-3d-v'
+            className={`shadow-2xl ${
+              touchGhost.orientation === 'h' ? 'w-24 h-4.5 wall-3d-h' : 'w-4.5 h-24 wall-3d-v'
             }`}
             style={{
               backgroundColor: getPlayerStyle(currentPlayerIdx, pieceTheme).color,
               backgroundImage: touchGhost.orientation === 'h'
                 ? getPlayerStyle(currentPlayerIdx, pieceTheme).wallGradientH
                 : getPlayerStyle(currentPlayerIdx, pieceTheme).wallGradientV,
-              boxShadow: `0 0 28px ${getPlayerStyle(currentPlayerIdx, pieceTheme).wallGlow}, 0 8px 18px rgba(0, 0, 0, 0.85)`,
+              boxShadow: `0 0 24px ${getPlayerStyle(currentPlayerIdx, pieceTheme).wallGlow}, 0 6px 16px rgba(0, 0, 0, 0.8)`,
             }}
-          >
-            {touchGhost.orientation === 'h' ? (
-              <>
-                <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/60 to-transparent pointer-events-none" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-[80%] rounded-[2px] bg-black/45 border-x border-white/60 pointer-events-none" />
-              </>
-            ) : (
-              <>
-                <div className="absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-white/60 to-transparent pointer-events-none" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-2.5 w-[80%] rounded-[2px] bg-black/45 border-y border-white/60 pointer-events-none" />
-              </>
-            )}
-          </div>
+          />
         </div>
       )}
 

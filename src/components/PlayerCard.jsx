@@ -292,17 +292,14 @@ export default function PlayerCard({
                 boxShadow: activeWallOrientation === 'h' && isActive ? `0 0 16px ${playerStyle.wallGlow}, 0 4px 8px rgba(0,0,0,0.5)` : undefined,
               }}
             >
-              {/* Horizontal Wall Bar Icon with 3D Slab styling */}
+              {/* Horizontal Wall Bar Icon matching user reference image */}
               <div
-                className="w-5 sm:w-6 h-2 sm:h-2.5 rounded-[3px] wall-3d-h transition-transform pointer-events-none relative overflow-hidden"
+                className="w-5.5 sm:w-6.5 h-2 sm:h-2.5 wall-3d-h pointer-events-none transition-transform"
                 style={{
                   backgroundImage: playerStyle.wallGradientH,
-                  borderColor: playerStyle.wallBorder,
+                  backgroundColor: playerStyle.color,
                 }}
-              >
-                <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/50 to-transparent pointer-events-none" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-[80%] bg-black/40 border-x border-white/40 pointer-events-none" />
-              </div>
+              />
               <span className="text-[8px] sm:text-[9px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
                 ──
               </span>
@@ -331,17 +328,14 @@ export default function PlayerCard({
                 boxShadow: activeWallOrientation === 'v' && isActive ? `0 0 16px ${playerStyle.wallGlow}, 0 4px 8px rgba(0,0,0,0.5)` : undefined,
               }}
             >
-              {/* Vertical Wall Bar Icon with 3D Slab styling */}
+              {/* Vertical Wall Bar Icon matching user reference image */}
               <div
-                className="w-2 sm:w-2.5 h-5 sm:h-6 rounded-[3px] wall-3d-v transition-transform pointer-events-none relative overflow-hidden"
+                className="w-2 sm:w-2.5 h-5.5 sm:h-6.5 wall-3d-v pointer-events-none transition-transform"
                 style={{
                   backgroundImage: playerStyle.wallGradientV,
-                  borderColor: playerStyle.wallBorder,
+                  backgroundColor: playerStyle.color,
                 }}
-              >
-                <div className="absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-white/50 to-transparent pointer-events-none" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1.5 w-[80%] bg-black/40 border-y border-white/40 pointer-events-none" />
-              </div>
+              />
               <span className="text-[8px] sm:text-[9px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
                 │
               </span>
