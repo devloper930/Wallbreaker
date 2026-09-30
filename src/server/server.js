@@ -14,6 +14,7 @@ import {
   MODES,
 } from '../logic/gameEngine.js';
 import { HUMAN_PERSONAS_POOL } from '../logic/personas.js';
+import { mergeLeaderboardWithPersonas } from '../logic/personaLeaderboard.js';
 import dotenv from 'dotenv';
 import { supabaseAdmin } from './supabaseAdmin.js';
 
@@ -956,20 +957,28 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Real Top 100 Leaderboard REST endpoint
+// Real Top 100 Leaderboard REST endpoint (Merges real players with 300 AI Personas)
 app.get('/api/leaderboard', async (req, res) => {
   try {
-    const { data: players, error } = await supabaseAdmin
-      .from('players')
-      .select('id, display_name, avatar, country, rating, wins, losses, draws, games_played')
-      .order('rating', { ascending: false })
-      .limit(100);
+    let dbPlayers = [];
+    if (supabaseAdmin) {
+      const { data: players, error } = await supabaseAdmin
+        .from('players')
+        .select('id, display_name, avatar, country, rating, peak_rating, wins, losses, draws, games_played')
+        .order('rating', { ascending: false })
+        .limit(100);
 
-    if (error) throw error;
-    res.json({ success: true, players: players || [] });
+      if (!error && Array.isArray(players)) {
+        dbPlayers = players;
+      }
+    }
+
+    const merged = mergeLeaderboardWithPersonas(dbPlayers);
+    res.json({ success: true, players: merged });
   } catch (err) {
     log('ERROR', { event: 'api:leaderboard', error: err.message });
-    res.status(500).json({ success: false, error: 'Failed to fetch leaderboard' });
+    const fallback = mergeLeaderboardWithPersonas([]);
+    res.json({ success: true, players: fallback });
   }
 });
 

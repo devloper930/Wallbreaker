@@ -1,12 +1,13 @@
 import { getTitleForRating } from './profile.js';
 import { supabase } from '../lib/supabaseClient.js';
+import { mergeLeaderboardWithPersonas } from './personaLeaderboard.js';
 
 let cachedPlayers = [];
 
 /**
  * Fetch real Top 100 Global Competitive Leaderboard from database/server
- * Queries `players` table: SELECT display_name, avatar, country, rating, wins, losses, draws, games_played
- * ORDER BY rating DESC LIMIT 100
+ * Combines real players from `players` table with 300 competitive AI personas.
+ * Real players naturally take their places based on rating.
  */
 export async function fetchGlobalLeaderboard(userProfile) {
   let playersList = [];
@@ -16,7 +17,7 @@ export async function fetchGlobalLeaderboard(userProfile) {
     const response = await fetch('/api/leaderboard');
     if (response.ok) {
       const data = await response.json();
-      if (Array.isArray(data.players)) {
+      if (Array.isArray(data.players) && data.players.length > 0) {
         playersList = data.players;
       }
     }
@@ -29,22 +30,24 @@ export async function fetchGlobalLeaderboard(userProfile) {
     try {
       const { data, error } = await supabase
         .from('players')
-        .select('id, display_name, avatar, country, rating, wins, losses, draws, games_played')
+        .select('id, display_name, avatar, country, rating, peak_rating, wins, losses, draws, games_played')
         .order('rating', { ascending: false })
         .limit(100);
 
       if (!error && Array.isArray(data)) {
-        playersList = data;
+        playersList = mergeLeaderboardWithPersonas(data);
       }
     } catch (clientErr) {
       console.error('[Leaderboard] Direct Supabase fetch error:', clientErr);
     }
   }
 
-  if (playersList.length > 0) {
-    cachedPlayers = playersList;
+  // 3. Fallback: If both fail or empty, use persona pool
+  if (playersList.length === 0) {
+    playersList = mergeLeaderboardWithPersonas([]);
   }
 
+  cachedPlayers = playersList;
   return processLeaderboardData(playersList, userProfile);
 }
 
@@ -52,6 +55,9 @@ export async function fetchGlobalLeaderboard(userProfile) {
  * Synchronous getter using cached or fallback data
  */
 export function getGlobalLeaderboard(userProfile) {
+  if (cachedPlayers.length === 0) {
+    cachedPlayers = mergeLeaderboardWithPersonas([]);
+  }
   return processLeaderboardData(cachedPlayers, userProfile);
 }
 

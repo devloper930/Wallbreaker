@@ -51,6 +51,10 @@ export default function AuthModal({
       if (oauthErr) {
         throw oauthErr;
       }
+
+      if (data?.url) {
+        window.location.assign(data.url);
+      }
     } catch (err) {
       console.error('Google Sign In Error:', err);
       setError(err.message || 'Failed to initiate Google sign in.');
@@ -169,7 +173,13 @@ export default function AuthModal({
           }, 600);
         }
       } catch (err) {
-        setError(err.message || 'Invalid email or password.');
+        if (err.message?.includes('Email not confirmed') || err.code === 'email_not_confirmed') {
+          setError('Email is not confirmed yet. Check your inbox, or disable "Confirm email" in Supabase Auth settings.');
+        } else if (err.message?.includes('Invalid login credentials') || err.code === 'invalid_credentials') {
+          setError("No account found with this email/password. Click 'Create Account' above to register!");
+        } else {
+          setError(err.message || 'Invalid email or password.');
+        }
       } finally {
         setLoading(false);
       }

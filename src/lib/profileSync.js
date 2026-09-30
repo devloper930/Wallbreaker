@@ -8,20 +8,33 @@ const LOCAL_RATING_KEY = 'wallbreaker_player_rating';
  * Format a raw database row from the `players` table into the app's userProfile shape
  */
 export function formatPlayerProfile(row, user) {
-  if (!row) return null;
-  const rating = row.rating ?? 400;
+  if (!row && !user) return null;
+  const legacy = getLegacyLocalProfile();
+  const rating = row?.rating ?? legacy?.rating ?? 400;
+  const name =
+    row?.display_name ||
+    user?.user_metadata?.display_name ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    legacy?.name ||
+    user?.email?.split('@')[0] ||
+    'Player';
+
   return {
-    id: row.id,
+    id: row?.id || user?.id,
     email: user?.email || '',
-    name: row.display_name || 'Player',
+    name,
     rating,
-    peakRating: row.peak_rating || rating,
-    wins: row.wins ?? 0,
-    losses: row.losses ?? 0,
-    draws: row.draws ?? 0,
-    gamesPlayed: row.games_played ?? ((row.wins ?? 0) + (row.losses ?? 0) + (row.draws ?? 0)),
-    avatar: row.avatar || '👤',
-    country: row.country || '🌍',
+    peakRating: row?.peak_rating || legacy?.peakRating || rating,
+    wins: row?.wins ?? legacy?.wins ?? 0,
+    losses: row?.losses ?? legacy?.losses ?? 0,
+    draws: row?.draws ?? legacy?.draws ?? 0,
+    gamesPlayed:
+      row?.games_played ??
+      legacy?.gamesPlayed ??
+      ((row?.wins ?? 0) + (row?.losses ?? 0) + (row?.draws ?? 0)),
+    avatar: row?.avatar || legacy?.avatar || '👤',
+    country: row?.country || legacy?.country || '🌍',
     title: getTitleForRating(rating),
     isLoggedIn: true,
     authProvider: user?.app_metadata?.provider || 'email',
@@ -189,6 +202,6 @@ export async function syncOrProvisionProfile(user, session, preferredDisplayName
     return formatPlayerProfile(playerRow, user);
   } catch (err) {
     console.error('[ProfileSync] Unexpected error during sync:', err);
-    return null;
+    return formatPlayerProfile(null, user);
   }
 }
