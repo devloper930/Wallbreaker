@@ -982,6 +982,97 @@ app.get('/api/leaderboard', async (req, res) => {
   }
 });
 
+// Authoritative Match Result Recording Endpoint for Online Play (vs AI Personas or 1v1)
+app.post('/api/match/record', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+    if (authErr || !user) {
+      return res.status(401).json({ success: false, error: 'Invalid auth token' });
+    }
+
+    const { matchType = 'online', opponentRating = 400, isWin, isLoss, isDraw } = req.body;
+
+    // Fetch player profile from database
+    const { data: playerRow, error: fetchErr } = await supabaseAdmin
+      .from('players')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (fetchErr) {
+      log('MATCH_RECORD_FETCH_ERROR', { error: fetchErr.message });
+    }
+
+    const currentRating = playerRow?.rating || 400;
+    const currentWins = playerRow?.wins || 0;
+    const currentLosses = playerRow?.losses || 0;
+    const currentDraws = playerRow?.draws || 0;
+    const currentGames = playerRow?.games_played || 0;
+
+    let ratingChange = 0;
+    let newRating = currentRating;
+
+    if (matchType === 'online') {
+      const actualScore = isWin ? 1 : isLoss ? 0 : 0.5;
+      const expectedScore = 1 / (1 + Math.pow(10, (opponentRating - currentRating) / 400));
+      ratingChange = Math.round(32 * (actualScore - expectedScore));
+      newRating = Math.max(100, currentRating + ratingChange);
+    }
+
+    const updatedWins = currentWins + (isWin ? 1 : 0);
+    const updatedLosses = currentLosses + (isLoss ? 1 : 0);
+    const updatedDraws = currentDraws + (isDraw ? 1 : 0);
+    const updatedGames = currentGames + 1;
+    const updatedPeak = Math.max(playerRow?.peak_rating || newRating, newRating);
+
+    if (playerRow) {
+      const { error: updateErr } = await supabaseAdmin
+        .from('players')
+        .update({
+          rating: newRating,
+          peak_rating: updatedPeak,
+          wins: updatedWins,
+          losses: updatedLosses,
+          draws: updatedDraws,
+          games_played: updatedGames,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+
+      if (updateErr) {
+        log('MATCH_RECORD_UPDATE_ERROR', { error: updateErr.message });
+      }
+    }
+
+    log('MATCH_RECORDED_SUCCESS', {
+      userId: user.id,
+      matchType,
+      isWin,
+      isLoss,
+      ratingChange,
+      newRating,
+    });
+
+    res.json({
+      success: true,
+      ratingChange,
+      newRating,
+      wins: updatedWins,
+      losses: updatedLosses,
+      draws: updatedDraws,
+      gamesPlayed: updatedGames,
+    });
+  } catch (err) {
+    log('ERROR', { event: 'api:match_record', error: err.message });
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // One-time legacy profile migration endpoint for fresh accounts
 app.post('/api/profile/migrate', async (req, res) => {
   try {

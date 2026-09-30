@@ -501,19 +501,108 @@ export default function App() {
     return () => clearInterval(timerInterval);
   }, [view, gameType, gameState.status, gameState.timeControl.time, onlineRoomCode]);
 
-  // Handle Game End & Modal Display
+  // Handle Game End, Modal Display & Stat Recording
   useEffect(() => {
     if (gameState.status === 'ended') {
       if (activeModalRef.current !== 'gameover') {
         openModal('gameover');
       }
 
-      // If this was not a server-hosted online match, rating is never modified (bot/local matches are unranked)
-      if (!onlineRoomCode || gameType !== 'online') {
+      if (hasRecordedMatchRef.current) {
+        return;
+      }
+      hasRecordedMatchRef.current = true;
+
+      const humanIndex =
+        gameType === 'online' && onlinePlayerIndex !== null && onlinePlayerIndex !== undefined
+          ? onlinePlayerIndex
+          : 0;
+
+      const isWin = gameState.winner === humanIndex;
+      const isDraw = gameState.winner === null || gameState.winner === undefined;
+      const isLoss = !isWin && !isDraw;
+
+      const oppIndex = humanIndex === 0 ? 1 : 0;
+      const opponentPlayer = gameState.players[oppIndex] || gameState.players[1];
+      const opponentName = matchedOpponent?.name || opponentPlayer?.name || currentBot?.name || 'Opponent';
+      const oppRating = matchedOpponent?.rating || opponentPlayer?.rating || currentBot?.rating || 400;
+      const oppAvatar = matchedOpponent?.avatar || opponentPlayer?.avatar || currentBot?.avatar || '👤';
+
+      if (gameType === 'online') {
+        // If it's a server room match with 2 sockets, server emits game:match_recorded.
+        // If it's Play Online vs AI persona (no onlineRoomCode), calculate Elo locally & sync to server:
+        if (!onlineRoomCode) {
+          const myRating = userProfile?.rating || 400;
+          const eloDelta = calculateEloChange(myRating, oppRating, isWin ? 1 : isLoss ? 0 : 0.5);
+          setMatchRatingChange(eloDelta);
+
+          const updated = recordMatchResult(isWin, isLoss, eloDelta, {
+            matchType: 'online',
+            opponent: opponentName,
+            opponentRating: oppRating,
+            opponentAvatar: oppAvatar,
+            mode: gameMode,
+            history: gameState.history,
+          });
+          setUserProfile(updated);
+          saveUserProfile(updated);
+
+          // If signed in, sync authoritative result to Supabase via server
+          if (session?.access_token) {
+            fetch('/api/match/record', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                matchType: 'online',
+                opponentRating: oppRating,
+                isWin,
+                isLoss,
+                isDraw,
+                mode: gameMode,
+              }),
+            })
+              .then((res) => res.json())
+              .then((data) => {
+                if (data.success) {
+                  console.log('[MatchSync] Match result saved to Supabase:', data);
+                }
+              })
+              .catch((err) => console.warn('[MatchSync] Could not sync match result to server:', err));
+          }
+        }
+      } else if (gameType === 'bot') {
+        // Vs Computer / Bot: record match in profile and career record (rating unchanged)
+        setMatchRatingChange(0);
+        const updated = recordMatchResult(isWin, isLoss, 0, {
+          matchType: 'bot',
+          opponent: currentBot?.name || 'Computer Engine',
+          opponentRating: currentBot?.rating || 1000,
+          opponentAvatar: currentBot?.avatar || '🤖',
+          mode: gameMode,
+          history: gameState.history,
+        });
+        setUserProfile(updated);
+        saveUserProfile(updated);
+      } else {
         setMatchRatingChange(null);
       }
+    } else {
+      hasRecordedMatchRef.current = false;
     }
-  }, [gameState.status, onlineRoomCode, gameType]);
+  }, [
+    gameState.status,
+    onlineRoomCode,
+    gameType,
+    onlinePlayerIndex,
+    matchedOpponent,
+    currentBot,
+    userProfile,
+    gameMode,
+    session,
+  ]);
 
   // AI Bot & Online Rank-Matched Opponent Turn Execution (Supports 2-Player & Quad Players 2, 3, 4)
   useEffect(() => {

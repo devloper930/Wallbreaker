@@ -296,21 +296,21 @@ export function saveUserProfile(profile) {
 }
 
 export function recordMatchResult(isWin, isLoss, ratingChange = 0, matchDetails = {}) {
-  // Career stats only record Play Online matches
-  if (matchDetails.matchType && matchDetails.matchType !== 'online') {
-    return getUserProfile();
-  }
-
   const profile = getUserProfile();
-  if (isWin) profile.wins += 1;
-  else if (isLoss) profile.losses += 1;
-  else profile.draws += 1;
+  const matchType = matchDetails.matchType || 'online';
 
-  if (ratingChange) {
+  if (isWin) profile.wins = (profile.wins || 0) + 1;
+  else if (isLoss) profile.losses = (profile.losses || 0) + 1;
+  else profile.draws = (profile.draws || 0) + 1;
+
+  profile.gamesPlayed = (profile.wins || 0) + (profile.losses || 0) + (profile.draws || 0);
+
+  // Competitive Elo rating is only modified in Online matches
+  if (matchType === 'online' && ratingChange) {
     profile.rating = Math.max(100, (profile.rating || 400) + ratingChange);
+    profile.peakRating = Math.max(profile.peakRating || 400, profile.rating);
+    profile.title = getTitleForRating(profile.rating);
   }
-  profile.peakRating = Math.max(profile.peakRating || 400, profile.rating);
-  profile.title = getTitleForRating(profile.rating);
 
   if (!profile.matches) {
     profile.matches = [];
@@ -318,7 +318,7 @@ export function recordMatchResult(isWin, isLoss, ratingChange = 0, matchDetails 
 
   const matchRecord = {
     id: `m_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-    matchType: 'online',
+    matchType,
     date: new Date().toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
