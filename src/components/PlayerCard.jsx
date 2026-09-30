@@ -11,6 +11,172 @@ function formatTime(seconds) {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+// Clean 3D Vector Wall Token directly mirroring user's reference coin design (Image 2)
+function WallToken({ orientation = 'h', idPrefix = 'coin-h' }) {
+  const isH = orientation === 'h';
+
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      className="w-full h-full pointer-events-none select-none drop-shadow-sm"
+    >
+      <defs>
+        {/* Inner coin face clip path */}
+        <clipPath id={`${idPrefix}-disc-clip`}>
+          <circle cx="50" cy="50" r="39" />
+        </clipPath>
+
+        {/* Outer coin bevel ring gradient */}
+        <linearGradient id={`${idPrefix}-rim`} x1="15%" y1="0%" x2="85%" y2="100%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="35%" stopColor="#f1f4f8" />
+          <stop offset="70%" stopColor="#d9e0e8" />
+          <stop offset="100%" stopColor="#b4bcc6" />
+        </linearGradient>
+
+        {/* Inner coin face recessed disc gradient */}
+        <radialGradient id={`${idPrefix}-face`} cx="42%" cy="38%" r="62%">
+          <stop offset="0%" stopColor="#edf2f7" />
+          <stop offset="60%" stopColor="#d8dfe7" />
+          <stop offset="100%" stopColor="#c0c8d3" />
+        </radialGradient>
+
+        {/* Wall slab gradient (clean white-silver 3D barrier matching reference image) */}
+        <linearGradient id={`${idPrefix}-slab`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="25%" stopColor="#fafbfc" />
+          <stop offset="75%" stopColor="#e5ebf1" />
+          <stop offset="100%" stopColor="#d4dbe4" />
+        </linearGradient>
+      </defs>
+
+      {/* 1. Outer Dark Border Rim & Bevel */}
+      <circle
+        cx="50"
+        cy="50"
+        r="46.5"
+        fill={`url(#${idPrefix}-rim)`}
+        stroke="#23272e"
+        strokeWidth="4"
+      />
+
+      {/* 2. Inner Groove Line Separator */}
+      <circle
+        cx="50"
+        cy="50"
+        r="39.2"
+        fill="none"
+        stroke="#757f8e"
+        strokeWidth="1.6"
+      />
+
+      {/* 3. Recessed Inner Coin Disc */}
+      <circle
+        cx="50"
+        cy="50"
+        r="38.4"
+        fill={`url(#${idPrefix}-face)`}
+      />
+
+      {/* 4. Diagonal Cast Shadow onto the Disc (Image 2 style) */}
+      <g clipPath={`url(#${idPrefix}-disc-clip)`}>
+        {isH ? (
+          /* Diagonal cast shadow falling from lower & right edges of horizontal slab */
+          <polygon
+            points="18,60 52,94 95,95 95,54 82,41 82,60"
+            fill="#9da6b2"
+            opacity="0.88"
+          />
+        ) : (
+          /* Diagonal cast shadow falling from lower & right edges of vertical slab */
+          <polygon
+            points="40,82 54,96 96,96 96,52 60,18 60,82"
+            fill="#9da6b2"
+            opacity="0.88"
+          />
+        )}
+      </g>
+
+      {/* 5. Center Wall Slab Barrier */}
+      {isH ? (
+        <g>
+          {/* Horizontal Slab: 64% width, 20% height, rounded corners */}
+          <rect
+            x="18"
+            y="40"
+            width="64"
+            height="20"
+            rx="4.5"
+            ry="4.5"
+            fill={`url(#${idPrefix}-slab)`}
+            stroke="#23272e"
+            strokeWidth="3.4"
+          />
+          {/* Top Specular Highlight Bevel */}
+          <rect
+            x="20.5"
+            y="42"
+            width="59"
+            height="6.5"
+            rx="2.5"
+            ry="2.5"
+            fill="#ffffff"
+            opacity="0.95"
+          />
+          {/* Bottom Inset Subtle Shadow */}
+          <rect
+            x="20.5"
+            y="54"
+            width="59"
+            height="3.5"
+            rx="1.5"
+            ry="1.5"
+            fill="#b8c0cc"
+            opacity="0.5"
+          />
+        </g>
+      ) : (
+        <g>
+          {/* Vertical Slab: 20% width, 64% height, rounded corners */}
+          <rect
+            x="40"
+            y="18"
+            width="20"
+            height="64"
+            rx="4.5"
+            ry="4.5"
+            fill={`url(#${idPrefix}-slab)`}
+            stroke="#23272e"
+            strokeWidth="3.4"
+          />
+          {/* Left Specular Highlight Bevel */}
+          <rect
+            x="42"
+            y="20.5"
+            width="6.5"
+            height="59"
+            rx="2.5"
+            ry="2.5"
+            fill="#ffffff"
+            opacity="0.95"
+          />
+          {/* Right Inset Subtle Shadow */}
+          <rect
+            x="54"
+            y="20.5"
+            width="3.5"
+            height="59"
+            rx="1.5"
+            ry="1.5"
+            fill="#b8c0cc"
+            opacity="0.5"
+          />
+        </g>
+      )}
+    </svg>
+  );
+}
+
 export default function PlayerCard({
   player,
   playerIndex,
@@ -257,10 +423,10 @@ export default function PlayerCard({
           </div>
         </div>
 
-        {/* Center: Two Sleek Circular Wall Buttons (Horizontal & Vertical) */}
+        {/* Center: Two Sleek Circular Wall Buttons (Horizontal & Vertical) matching user reference Image 2 */}
         {showWallButtons && wallsCount > 0 && (
           <div
-            className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 rounded-2xl bg-[#1b1a17]/95 border border-[#3c3934] shadow-inner transition-all duration-150 relative ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 rounded-2xl bg-[#1b1a17]/95 border border-[#3c3934] shadow-inner transition-all duration-150 relative ${
               isActive && isMyTurn ? 'opacity-100 ring-1 ring-amber-400/30' : 'opacity-40 pointer-events-none'
             }`}
           >
@@ -269,7 +435,7 @@ export default function PlayerCard({
               DRAG
             </span>
 
-            {/* Circular Button 1: Horizontal Wall [ ── ] */}
+            {/* Circular Button 1: Horizontal Wall Token */}
             <div
               draggable={isActive && isMyTurn}
               onDragStart={(e) => handleWallDragStart(e, 'h')}
@@ -279,33 +445,26 @@ export default function PlayerCard({
               onTouchEnd={handleWallTouchEnd}
               onTouchCancel={handleWallTouchEnd}
               onClick={() => onSelectWallOrientation && onSelectWallOrientation('h')}
-              title="Drag onto board to place Horizontal Wall [ ── ]"
-              className={`relative w-9 h-9 sm:w-11 sm:h-11 rounded-full flex flex-col items-center justify-center cursor-grab active:cursor-grabbing transition-all select-none touch-none ${
+              title="Drag onto board or tap to place Horizontal Wall"
+              className={`relative w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing transition-all select-none touch-none p-0.5 ${
                 activeWallOrientation === 'h' && isActive
-                  ? 'scale-105 shadow-lg ring-2 ring-white/30'
-                  : 'hover:scale-105 hover:border-white/40'
+                  ? 'scale-110 shadow-lg ring-2 ring-offset-2 ring-offset-[#1b1a17] z-10'
+                  : 'hover:scale-105 opacity-85 hover:opacity-100'
               }`}
               style={{
                 touchAction: 'none',
-                backgroundColor: activeWallOrientation === 'h' ? '#2b2926' : '#21201d',
-                border: `2px solid ${activeWallOrientation === 'h' && isActive ? playerStyle.color : '#3c3934'}`,
-                boxShadow: activeWallOrientation === 'h' && isActive ? `0 0 16px ${playerStyle.wallGlow}, 0 4px 8px rgba(0,0,0,0.5)` : undefined,
+                boxShadow:
+                  activeWallOrientation === 'h' && isActive
+                    ? `0 0 16px ${playerStyle.wallGlow}, 0 4px 10px rgba(0,0,0,0.6)`
+                    : '0 2px 5px rgba(0,0,0,0.4)',
+                outline: activeWallOrientation === 'h' && isActive ? `2px solid ${playerStyle.color}` : 'none',
+                outlineOffset: '2px',
               }}
             >
-              {/* Horizontal Wall Bar Icon matching user reference image */}
-              <div
-                className="w-5.5 sm:w-6.5 h-2 sm:h-2.5 wall-3d-h pointer-events-none transition-transform"
-                style={{
-                  backgroundImage: playerStyle.wallGradientH,
-                  backgroundColor: playerStyle.color,
-                }}
-              />
-              <span className="text-[8px] sm:text-[9px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
-                ──
-              </span>
+              <WallToken orientation="h" idPrefix={`coin-h-${playerIndex}`} />
             </div>
 
-            {/* Circular Button 2: Vertical Wall [ │ ] */}
+            {/* Circular Button 2: Vertical Wall Token */}
             <div
               draggable={isActive && isMyTurn}
               onDragStart={(e) => handleWallDragStart(e, 'v')}
@@ -315,30 +474,23 @@ export default function PlayerCard({
               onTouchEnd={handleWallTouchEnd}
               onTouchCancel={handleWallTouchEnd}
               onClick={() => onSelectWallOrientation && onSelectWallOrientation('v')}
-              title="Drag onto board to place Vertical Wall [ │ ]"
-              className={`relative w-9 h-9 sm:w-11 sm:h-11 rounded-full flex flex-col items-center justify-center cursor-grab active:cursor-grabbing transition-all select-none touch-none ${
+              title="Drag onto board or tap to place Vertical Wall"
+              className={`relative w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing transition-all select-none touch-none p-0.5 ${
                 activeWallOrientation === 'v' && isActive
-                  ? 'scale-105 shadow-lg ring-2 ring-white/30'
-                  : 'hover:scale-105 hover:border-white/40'
+                  ? 'scale-110 shadow-lg ring-2 ring-offset-2 ring-offset-[#1b1a17] z-10'
+                  : 'hover:scale-105 opacity-85 hover:opacity-100'
               }`}
               style={{
                 touchAction: 'none',
-                backgroundColor: activeWallOrientation === 'v' ? '#2b2926' : '#21201d',
-                border: `2px solid ${activeWallOrientation === 'v' && isActive ? playerStyle.color : '#3c3934'}`,
-                boxShadow: activeWallOrientation === 'v' && isActive ? `0 0 16px ${playerStyle.wallGlow}, 0 4px 8px rgba(0,0,0,0.5)` : undefined,
+                boxShadow:
+                  activeWallOrientation === 'v' && isActive
+                    ? `0 0 16px ${playerStyle.wallGlow}, 0 4px 10px rgba(0,0,0,0.6)`
+                    : '0 2px 5px rgba(0,0,0,0.4)',
+                outline: activeWallOrientation === 'v' && isActive ? `2px solid ${playerStyle.color}` : 'none',
+                outlineOffset: '2px',
               }}
             >
-              {/* Vertical Wall Bar Icon matching user reference image */}
-              <div
-                className="w-2 sm:w-2.5 h-5.5 sm:h-6.5 wall-3d-v pointer-events-none transition-transform"
-                style={{
-                  backgroundImage: playerStyle.wallGradientV,
-                  backgroundColor: playerStyle.color,
-                }}
-              />
-              <span className="text-[8px] sm:text-[9px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
-                │
-              </span>
+              <WallToken orientation="v" idPrefix={`coin-v-${playerIndex}`} />
             </div>
           </div>
         )}
