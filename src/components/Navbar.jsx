@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Volume2, VolumeX, Palette, Users, Bot, Wifi, HelpCircle, Home, Zap, Settings, User } from 'lucide-react';
+import { Volume2, VolumeX, Palette, Users, Bot, Wifi, HelpCircle, Home, Zap, Settings, User, LogIn } from 'lucide-react';
 import { soundManager } from '../utils/audio';
 import { PIECE_THEMES } from '../logic/pieceThemes';
 
@@ -19,6 +19,7 @@ export default function Navbar({
   onOpenProfile,
   onOpenRules,
   onOpenSettings,
+  onOpenAuthModal,
   roomCode,
 }) {
   const [themeSection, setThemeSection] = useState('board'); // 'board' | 'pieces'
@@ -240,14 +241,26 @@ export default function Navbar({
           <Settings className="w-4 h-4" />
         </button>
 
-        {/* Profile option in the right side of settings */}
-        <button
-          onClick={onOpenProfile}
-          title="Profile & Customization"
-          className="p-1.5 sm:p-2 rounded-lg hover:bg-[#2b2926] text-[#9e9c98] hover:text-white transition-colors flex items-center text-xs"
-        >
-          <User className="w-4 h-4 text-emerald-400" />
-        </button>
+        {/* Profile / Sign In button */}
+        {userProfile?.isLoggedIn ? (
+          <button
+            onClick={onOpenProfile}
+            title={`${userProfile.name} (Profile & Customization)`}
+            className="p-1 sm:px-2.5 sm:py-1 rounded-lg bg-[#272522] hover:bg-[#322f2b] border border-[#3c3934] text-white flex items-center gap-1.5 text-xs transition-colors cursor-pointer"
+          >
+            <span className="text-sm">{userProfile.avatar || '👤'}</span>
+            <span className="font-bold hidden sm:inline max-w-[90px] truncate">{userProfile.name}</span>
+          </button>
+        ) : (
+          <button
+            onClick={onOpenAuthModal || onOpenProfile}
+            title="Sign In to Wallbreaker"
+            className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-[#81b64c] hover:bg-[#95c85d] text-black font-extrabold text-xs flex items-center gap-1.5 shadow transition-all active:scale-95 flex-shrink-0 cursor-pointer"
+          >
+            <LogIn className="w-3.5 h-3.5 text-black" />
+            <span>Sign In</span>
+          </button>
+        )}
 
         {/* Audio Toggle */}
         <button

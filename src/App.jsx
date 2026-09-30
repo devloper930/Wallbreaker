@@ -1138,6 +1138,7 @@ export default function App() {
         onOpenProfile={() => openModal('profile')}
         onOpenRules={() => openModal('rules')}
         onOpenSettings={() => openModal('settings')}
+        onOpenAuthModal={() => openModal('auth')}
         roomCode={onlineRoomCode}
       />
 
@@ -1161,6 +1162,7 @@ export default function App() {
               openModal('quickplay');
             }}
             onOpenProfile={() => openModal('profile')}
+            onOpenAuthModal={() => openModal('auth')}
             onOpenStatsAnalysis={() => openModal('stats')}
             onlineConnecting={onlineConnecting}
             onlineError={onlineError}

@@ -8,6 +8,7 @@
     "dev:client": "vite",
     "dev:server": "node src/server/server.js",
     "build": "vite build",
+    "postinstall": "vite build",
     "start": "node src/server/server.js",
     "lint": "oxlint",
     "preview": "vite preview"

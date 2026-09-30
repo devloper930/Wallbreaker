@@ -25,6 +25,7 @@ import {
   Sliders,
   Edit2,
   Brain,
+  LogIn,
 } from 'lucide-react';
 
 export default function HomePage({
@@ -37,6 +38,7 @@ export default function HomePage({
   onJoinOnlineRoom,
   onQuickPlay,
   onOpenProfile,
+  onOpenAuthModal,
   onOpenStatsAnalysis,
   onlineConnecting = false,
   onlineError = null,
@@ -121,6 +123,30 @@ export default function HomePage({
           CENTERED PLAY PANEL
          ──────────────────────────────────────────────────── */}
       <div className="w-full bg-[#21201d] rounded-xl sm:rounded-2xl border border-[#3c3934] shadow-2xl p-2.5 sm:p-6 flex flex-col gap-3 sm:gap-5">
+        {/* Guest Account Sign In Banner */}
+        {!userProfile?.isLoggedIn && (
+          <div className="p-2.5 sm:p-3 bg-gradient-to-r from-emerald-950/70 via-[#272522] to-[#21201d] border border-emerald-600/40 rounded-xl flex items-center justify-between gap-2.5 sm:gap-3 text-xs shadow-md animate-in fade-in duration-150">
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+              </div>
+              <div className="min-w-0">
+                <span className="font-extrabold text-white text-xs block leading-tight">Guest Account</span>
+                <span className="text-[10px] sm:text-[11px] text-[#9e9c98] block truncate">
+                  Sign in to save rating & play ranked matches!
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={onOpenAuthModal}
+              className="px-3 sm:px-3.5 py-1.5 bg-[#81b64c] hover:bg-[#95c85d] text-black font-black text-xs rounded-lg shadow-md transition-all active:scale-95 flex-shrink-0 flex items-center gap-1.5 cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5 text-black" />
+              <span>Sign In</span>
+            </button>
+          </div>
+        )}
+
         {/* Player Stats & Match Analysis Card */}
         {(() => {
           const wins = userProfile?.wins || 0;

@@ -9,17 +9,21 @@ const __dirname = path.dirname(__filename);
 // Ensure .env from project root is loaded
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseUrl =
+  process.env.SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL ||
+  'https://qgzyekzzaxfieomdkkfg.supabase.co';
+
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseServiceRoleKey) {
+if (!supabaseServiceRoleKey) {
   console.warn(
-    '[SupabaseAdmin] Warning: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing in server environment.'
+    '[SupabaseAdmin] SUPABASE_SERVICE_ROLE_KEY is not defined in environment variables.'
   );
 }
 
 export const supabaseAdmin = createClient(
-  supabaseUrl || '',
+  supabaseUrl,
   supabaseServiceRoleKey || '',
   {
     auth: {
