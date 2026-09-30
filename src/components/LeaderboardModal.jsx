@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Trophy,
   X,
@@ -9,8 +9,9 @@ import {
   ChevronRight,
   Shield,
   Zap,
+  Loader2,
 } from 'lucide-react';
-import { getGlobalLeaderboard } from '../logic/leaderboard';
+import { fetchGlobalLeaderboard, processLeaderboardData } from '../logic/leaderboard';
 import { getTitleTierForRating } from '../logic/profile';
 
 export default function LeaderboardModal({
@@ -19,16 +20,40 @@ export default function LeaderboardModal({
   userProfile,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('all'); // 'all' | 'champion' | 'gm' | 'master'
-
-  const { top3, top100, userStanding } = useMemo(
-    () => getGlobalLeaderboard(userProfile),
-    [userProfile]
+  const [selectedFilter, setSelectedFilter] = useState('all'); // 'all' | 'gm' | 'im' | 'fm' | 'nm' | 'cm'
+  const [loading, setLoading] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState(() =>
+    processLeaderboardData([], userProfile)
   );
+
+  useEffect(() => {
+    if (isOpen) {
+      let isMounted = true;
+      setLoading(true);
+      fetchGlobalLeaderboard(userProfile)
+        .then((data) => {
+          if (isMounted && data) {
+            setLeaderboardData(data);
+          }
+        })
+        .catch((err) => {
+          console.error('[LeaderboardModal] Error loading leaderboard:', err);
+        })
+        .finally(() => {
+          if (isMounted) setLoading(false);
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [isOpen, userProfile]);
+
+  const { top3, top100, userStanding } = leaderboardData;
 
   const filteredRankings = useMemo(() => {
     return top100.filter((player) => {
-      const matchesSearch = player.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
+      const matchesSearch = (player.name || '').toLowerCase().includes(searchQuery.toLowerCase().trim());
       if (!matchesSearch) return false;
 
       if (selectedFilter === 'gm') return player.rating >= 2300;
@@ -156,9 +181,16 @@ export default function LeaderboardModal({
 
         {/* Top 100 Rankings Table */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-2">
-          {filteredRankings.length === 0 ? (
+          {loading && filteredRankings.length === 0 ? (
+            <div className="p-12 flex flex-col items-center justify-center gap-2 text-[#9e9c98] text-xs">
+              <Loader2 className="w-6 h-6 animate-spin text-[#81b64c]" />
+              <span>Fetching live global rankings from Supabase...</span>
+            </div>
+          ) : filteredRankings.length === 0 ? (
             <div className="p-8 text-center text-[#9e9c98] text-xs">
-              No players found matching your search.
+              {searchQuery
+                ? 'No players found matching your search.'
+                : 'No competitive players ranked yet. Play an online match to claim your spot on the global leaderboard!'}
             </div>
           ) : (
             filteredRankings.map((player) => {

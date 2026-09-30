@@ -7,7 +7,7 @@ import {
   TIME_CONTROLS,
 } from '../logic/gameEngine';
 import { getTitleTierForRating } from '../logic/profile';
-import { getGlobalLeaderboard } from '../logic/leaderboard';
+import { getGlobalLeaderboard, fetchGlobalLeaderboard } from '../logic/leaderboard';
 import {
   Bot,
   Users,
@@ -51,13 +51,24 @@ export default function HomePage({
   const [timeControlKey, setTimeControlKey] = useState('BLITZ_3');
   const [onlineTab, setOnlineTab] = useState('create');
   const [joinCode, setJoinCode] = useState('');
+  const [leaderboardData, setLeaderboardData] = useState(() => getGlobalLeaderboard(userProfile));
+
+  useEffect(() => {
+    let mounted = true;
+    fetchGlobalLeaderboard(userProfile).then((data) => {
+      if (mounted && data) {
+        setLeaderboardData(data);
+      }
+    }).catch((err) => {
+      console.warn('Failed to load home leaderboard preview:', err);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [userProfile]);
 
   const selectedBot = CHESS_BOTS.find(b => b.id === selectedBotId) || CHESS_BOTS[1];
-
-  const { top3 } = useMemo(
-    () => getGlobalLeaderboard(userProfile),
-    [userProfile]
-  );
+  const top3 = leaderboardData.top3 || [];
 
   const handleStartPlay = () => {
     const boardSize = selectedMode === MODES.QUAD ? quadGridSize : 9;

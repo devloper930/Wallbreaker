@@ -9,9 +9,10 @@ import {
   saveUserProfile,
   resetUserProfileStats,
 } from '../logic/profile';
-import { X, Check, User, RotateCcw, Globe, Award, ShieldCheck, ChevronRight, Lock } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
+import { X, Check, User, RotateCcw, Globe, Award, ShieldCheck, ChevronRight, Lock, LogIn, LogOut } from 'lucide-react';
 
-export default function ProfileModal({ isOpen, onClose, profile, onProfileUpdated }) {
+export default function ProfileModal({ isOpen, onClose, profile, onProfileUpdated, onOpenAuthModal, onSignOut }) {
   const [name, setName] = useState(profile?.name || 'Player');
   const [selectedAvatar, setSelectedAvatar] = useState(profile?.avatar || '👤');
   const [selectedCountry, setSelectedCountry] = useState(profile?.country || '🌍');
@@ -31,17 +32,36 @@ export default function ProfileModal({ isOpen, onClose, profile, onProfileUpdate
   const currentTier = getTitleTierForRating(currentRating);
   const nextTier = getNextTitleTier(currentRating);
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     if (e) e.preventDefault();
+    const cleanName = (name.trim() || 'Player').slice(0, 20);
     const updated = {
       ...profile,
-      name: name.trim() || 'Player',
+      name: cleanName,
       avatar: selectedAvatar,
       country: selectedCountry,
       rating: currentRating,
       title: getTitleForRating(currentRating),
     };
-    saveUserProfile(updated);
+
+    if (profile?.id) {
+      try {
+        await supabase
+          .from('players')
+          .update({
+            display_name: cleanName,
+            avatar: selectedAvatar,
+            country: selectedCountry,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', profile.id);
+      } catch (err) {
+        console.error('Failed to update Supabase profile:', err);
+      }
+    } else {
+      saveUserProfile(updated);
+    }
+
     onProfileUpdated(updated);
     onClose();
   };
@@ -90,6 +110,50 @@ export default function ProfileModal({ isOpen, onClose, profile, onProfileUpdate
         </div>
 
         <form onSubmit={handleSave} className="p-5 space-y-4 overflow-y-auto flex-1">
+          {/* Account Status / Cloud Sync Banner */}
+          <div className="p-3 bg-[#1b1a17] border border-[#3c3934] rounded-xl flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className={`w-4 h-4 ${profile?.id ? 'text-[#81b64c]' : 'text-[#9e9c98]'}`} />
+              <div>
+                <span className="font-bold text-white block text-[11px]">
+                  {profile?.id ? 'Supabase Account Active' : 'Guest Account'}
+                </span>
+                <span className="text-[10px] text-[#9e9c98]">
+                  {profile?.email || (profile?.id ? 'Signed in' : 'Sign in to sync rating across devices')}
+                </span>
+              </div>
+            </div>
+            {profile?.id ? (
+              onSignOut && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onSignOut();
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-[#272522] hover:bg-[#322f2b] text-red-400 hover:text-red-300 border border-[#3c3934] text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-3 h-3" />
+                  <span>Sign Out</span>
+                </button>
+              )
+            ) : (
+              onOpenAuthModal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenAuthModal();
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-[#81b64c] hover:bg-[#95c85d] text-black text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <LogIn className="w-3 h-3" />
+                  <span>Sign In</span>
+                </button>
+              )
+            )}
+          </div>
+
           {/* Avatar Preview & Stats Card */}
           <div className="flex items-center gap-4 p-3.5 bg-[#272522] rounded-xl border border-[#3c3934]">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#81b64c] to-emerald-400 flex items-center justify-center text-3xl shadow-lg border-2 border-white/20 flex-shrink-0">

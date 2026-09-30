@@ -8,9 +8,11 @@ import {
   TIME_CONTROLS,
 } from './logic/gameEngine';
 import { getBotMove, CHESS_BOTS } from './logic/aiBot';
-import { getUserProfile, saveUserProfile, recordMatchResult, MATCH_PLAYERS_POOL, getTitleForRating } from './logic/profile';
+import { getUserProfile, saveUserProfile, recordMatchResult, MATCH_PLAYERS_POOL, getTitleForRating, DEFAULT_PROFILE } from './logic/profile';
 import { calculateEloChange } from './logic/elo';
 import { soundManager } from './utils/audio';
+import { supabase } from './lib/supabaseClient';
+import { syncOrProvisionProfile } from './lib/profileSync';
 
 import Navbar from './components/Navbar';
 import HomePage from './components/HomePage';
@@ -32,6 +34,10 @@ import { Users, Copy, Check, Handshake, CheckCircle2, XCircle, Loader2 } from 'l
 export default function App() {
   // Navigation View: 'home' | 'game'
   const [view, setView] = useState('home');
+
+  // Supabase Auth Session State
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   // Leave Game Warning Modal State
   const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -137,15 +143,79 @@ export default function App() {
   const [incomingDrawOffer, setIncomingDrawOffer] = useState(null); // { fromPlayerIndex, playerName }
   const [showLocalDrawConfirm, setShowLocalDrawConfirm] = useState(false);
 
-  // Socket.io initialization
+  // Supabase Auth Session listener and automatic profile provisioning
   useEffect(() => {
+    let mounted = true;
+
+    // Check existing active session on app load
+    supabase.auth.getSession().then(({ data: { session: initSession } }) => {
+      if (!mounted) return;
+      setSession(initSession);
+      if (initSession?.user) {
+        syncOrProvisionProfile(initSession.user, initSession).then((synced) => {
+          if (mounted && synced) {
+            setUserProfile(synced);
+            saveUserProfile(synced);
+          }
+          if (mounted) setAuthLoading(false);
+        });
+      } else {
+        setAuthLoading(false);
+      }
+    }).catch((err) => {
+      console.warn('Error reading Supabase session:', err);
+      if (mounted) setAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (!mounted) return;
+      setSession(newSession);
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        if (newSession?.user) {
+          const synced = await syncOrProvisionProfile(newSession.user, newSession);
+          if (mounted && synced) {
+            setUserProfile(synced);
+            saveUserProfile(synced);
+          }
+        }
+      } else if (event === 'SIGNED_OUT') {
+        const guest = DEFAULT_PROFILE;
+        setUserProfile(guest);
+        saveUserProfile(guest);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Authenticated Socket.io connection using Supabase session access_token
+  useEffect(() => {
+    if (!session?.access_token) {
+      if (socket) {
+        socket.disconnect();
+        setSocket(null);
+      }
+      return;
+    }
+
     const s = io({
-      autoConnect: false,
+      autoConnect: true,
+      auth: {
+        token: session.access_token,
+      },
     });
     setSocket(s);
 
     s.on('connect', () => {
-      console.log('Connected to multiplayer server');
+      console.log('Connected to multiplayer server with Supabase auth');
+    });
+
+    s.on('connect_error', (err) => {
+      console.warn('Socket connection error:', err.message);
     });
 
     s.on('game:state_update', (updatedState) => {
@@ -170,6 +240,33 @@ export default function App() {
       setTimeout(() => {
         setReactions((prev) => prev.filter((r) => r.id !== reaction.id));
       }, 3200);
+    });
+
+    // Authoritative match result broadcast from server (Human vs Human ranked)
+    s.on('game:match_recorded', ({ winnerIndex, winReason, results }) => {
+      console.log('Match recorded on server:', { winnerIndex, results });
+      const currentUserId = session?.user?.id;
+      if (currentUserId && results?.[currentUserId]) {
+        const myResult = results[currentUserId];
+        setMatchRatingChange(myResult.change);
+        setUserProfile((prev) => {
+          const isWinner = winnerIndex === onlinePlayerIndex;
+          const isDraw = winnerIndex === null || winnerIndex === undefined;
+          const isLoser = !isWinner && !isDraw;
+          const updated = {
+            ...prev,
+            rating: myResult.rating,
+            peakRating: Math.max(prev.peakRating || myResult.rating, myResult.rating),
+            wins: (prev.wins || 0) + (isWinner ? 1 : 0),
+            losses: (prev.losses || 0) + (isLoser ? 1 : 0),
+            draws: (prev.draws || 0) + (isDraw ? 1 : 0),
+            gamesPlayed: (prev.gamesPlayed || 0) + 1,
+            title: getTitleForRating(myResult.rating),
+          };
+          saveUserProfile(updated);
+          return updated;
+        });
+      }
     });
 
     // Draw events for online room matches
@@ -203,7 +300,7 @@ export default function App() {
     return () => {
       s.disconnect();
     };
-  }, []);
+  }, [session?.access_token, session?.user?.id, onlinePlayerIndex]);
 
   // Modal open/close helpers with History API push/pop
   const openModal = (modalName) => {
@@ -404,52 +501,19 @@ export default function App() {
     return () => clearInterval(timerInterval);
   }, [view, gameType, gameState.status, gameState.timeControl.time, onlineRoomCode]);
 
-  // Handle Game End & Elo Rating Update (Strictly Play Online Ranked matches only)
+  // Handle Game End & Modal Display
   useEffect(() => {
     if (gameState.status === 'ended') {
       if (activeModalRef.current !== 'gameover') {
         openModal('gameover');
       }
 
-      // In career stats ONLY include play online matches (both real human and simulated human opponents).
-      // Do NOT include any other matches like vs computer, private room, or offline mode.
-      const isPlayOnlineMatch = gameType === 'online' && Boolean(matchedOpponent);
-
-      if (!hasRecordedMatchRef.current && isPlayOnlineMatch) {
-        hasRecordedMatchRef.current = true;
-        try {
-          const userIdx = (onlinePlayerIndex !== null && onlinePlayerIndex !== undefined) ? onlinePlayerIndex : 0;
-          const isUserWinner = gameState.winner === userIdx;
-          const isOpponentWinner = gameState.winner !== null && gameState.winner !== userIdx;
-          const score = isUserWinner ? 1 : isOpponentWinner ? 0 : 0.5;
-
-          const oppRating = matchedOpponent.rating;
-          const oppName = matchedOpponent.name;
-          const oppAvatar = matchedOpponent.avatar;
-
-          const eloResult = calculateEloChange(userProfile.rating, oppRating, score);
-          const change = eloResult.change;
-          setMatchRatingChange(change);
-
-          const updated = recordMatchResult(isUserWinner, isOpponentWinner, change, {
-            matchType: 'online',
-            opponent: oppName,
-            opponentRating: oppRating,
-            opponentAvatar: oppAvatar,
-            mode: gameMode === MODES.CLASSIC ? 'Classic Barricade' : gameMode === MODES.RACE ? 'Race Mode' : 'Quad Compete',
-            movesCount: gameState.history ? gameState.history.length : 0,
-            history: gameState.history || [],
-          });
-          setUserProfile(updated);
-        } catch (err) {
-          console.error('Error recording match result:', err);
-        }
-      } else if (!isPlayOnlineMatch) {
-        // Clear rating delta for unranked matches (vs computer, room, offline mode)
+      // If this was not a server-hosted online match, rating is never modified (bot/local matches are unranked)
+      if (!onlineRoomCode || gameType !== 'online') {
         setMatchRatingChange(null);
       }
     }
-  }, [gameState.status, gameState.winner, gameType, userProfile.rating, matchedOpponent, onlineRoomCode, onlinePlayerIndex, gameMode]);
+  }, [gameState.status, onlineRoomCode, gameType]);
 
   // AI Bot & Online Rank-Matched Opponent Turn Execution (Supports 2-Player & Quad Players 2, 3, 4)
   useEffect(() => {
@@ -740,6 +804,10 @@ export default function App() {
 
   // Create Online Room
   const handleCreateOnlineRoom = ({ mode, timeControlKey, boardSize = 9 }) => {
+    if (!session?.access_token) {
+      openModal('auth');
+      return;
+    }
     if (!socket) return;
     setOnlineConnecting(true);
     setOnlineError(null);
@@ -770,6 +838,10 @@ export default function App() {
 
   // Join Online Room
   const handleJoinOnlineRoom = ({ roomCode }) => {
+    if (!session?.access_token) {
+      openModal('auth');
+      return;
+    }
     if (!socket) return;
     setOnlineConnecting(true);
     setOnlineError(null);
@@ -823,42 +895,13 @@ export default function App() {
   const handleConfirmLeaveGame = () => {
     setShowLeaveModal(false);
 
-    // If leaving an active match in Play Online mode, treat as an immediate forfeit (loss)
+    // If leaving an active match in online room, resign via authoritative socket
     if (gameState.status === 'playing') {
-      const isPlayOnlineMatch = gameType === 'online' && Boolean(matchedOpponent);
-      if (isPlayOnlineMatch && !hasRecordedMatchRef.current) {
-        hasRecordedMatchRef.current = true;
-        try {
-          const oppRating = matchedOpponent.rating;
-          const oppName = matchedOpponent.name;
-          const oppAvatar = matchedOpponent.avatar;
-
-          // Forfeit -> score = 0 (loss)
-          const eloResult = calculateEloChange(userProfile.rating, oppRating, 0);
-          const change = eloResult.change;
-          setMatchRatingChange(change);
-
-          const updated = recordMatchResult(false, true, change, {
-            matchType: 'online',
-            opponent: oppName,
-            opponentRating: oppRating,
-            opponentAvatar: oppAvatar,
-            mode: gameMode === MODES.CLASSIC ? 'Classic Barricade' : gameMode === MODES.RACE ? 'Race Mode' : 'Quad Compete',
-            movesCount: gameState.history ? gameState.history.length : 0,
-            history: gameState.history || [],
-            winReason: 'Forfeited / Abandoned match',
-          });
-          setUserProfile(updated);
-        } catch (err) {
-          console.error('Error recording match forfeit:', err);
-        }
-
-        if (onlineRoomCode && socket) {
-          socket.emit('game:resign', {
-            roomCode: onlineRoomCode,
-            playerIndex: onlinePlayerIndex,
-          });
-        }
+      if (onlineRoomCode && socket) {
+        socket.emit('game:resign', {
+          roomCode: onlineRoomCode,
+          playerIndex: onlinePlayerIndex,
+        });
       }
     }
 
@@ -881,15 +924,20 @@ export default function App() {
   };
 
   // Sign out handler
-  const handleSignOut = () => {
-    const updated = {
-      ...userProfile,
-      isLoggedIn: false,
-      email: null,
-      authProvider: null,
-    };
-    setUserProfile(updated);
-    saveUserProfile(updated);
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Error during sign out:', err);
+    }
+    setSession(null);
+    const guest = DEFAULT_PROFILE;
+    setUserProfile(guest);
+    saveUserProfile(guest);
+    if (socket) {
+      socket.disconnect();
+      setSocket(null);
+    }
   };
 
   // Resign Handler (Supports instant win in 2P, or freeze pawn & skip turn in Quads)
@@ -1077,6 +1125,10 @@ export default function App() {
         userProfile={userProfile}
         onNavigateHome={requestNavigateHome}
         onQuickPlay={() => {
+          if (!session?.access_token) {
+            openModal('auth');
+            return;
+          }
           if (view === 'game' && gameState.status === 'playing') {
             setShowLeaveModal(true);
           } else {
@@ -1101,6 +1153,10 @@ export default function App() {
             onCreateOnlineRoom={handleCreateOnlineRoom}
             onJoinOnlineRoom={handleJoinOnlineRoom}
             onQuickPlay={(config) => {
+              if (!session?.access_token) {
+                openModal('auth');
+                return;
+              }
               if (config) setQuickPlayConfig(config);
               openModal('quickplay');
             }}
@@ -1390,7 +1446,12 @@ export default function App() {
         isOpen={activeModal === 'profile'}
         onClose={closeModal}
         profile={userProfile}
-        onProfileUpdated={(updated) => setUserProfile(updated)}
+        onProfileUpdated={(updated) => {
+          setUserProfile(updated);
+          saveUserProfile(updated);
+        }}
+        onOpenAuthModal={() => openModal('auth')}
+        onSignOut={handleSignOut}
       />
 
       <QuickPlayModal
@@ -1432,6 +1493,9 @@ export default function App() {
         onLoginSuccess={(updated) => {
           setUserProfile(updated);
           saveUserProfile(updated);
+          supabase.auth.getSession().then(({ data: { session: s } }) => {
+            if (s) setSession(s);
+          });
         }}
       />
 

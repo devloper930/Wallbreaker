@@ -14,10 +14,15 @@ import {
   MODES,
 } from '../logic/gameEngine.js';
 import { HUMAN_PERSONAS_POOL } from '../logic/personas.js';
+import dotenv from 'dotenv';
+import { supabaseAdmin } from './supabaseAdmin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, '../../dist');
+
+// Load environment configuration
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const app = express();
 
@@ -40,6 +45,31 @@ const io = new Server(server, {
     origin: allowedOrigin || true,
     methods: ['GET', 'POST'],
   },
+});
+
+// Authenticate all incoming Socket.io connections using Supabase Auth JWT
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    if (!token) {
+      log('SOCKET_AUTH_REJECTED', { socketId: socket.id, reason: 'Authentication token required' });
+      return next(new Error('Authentication token required'));
+    }
+
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !user) {
+      log('SOCKET_AUTH_REJECTED', { socketId: socket.id, reason: error?.message || 'Invalid authentication token' });
+      return next(new Error('Invalid authentication token'));
+    }
+
+    socket.userId = user.id;
+    socket.userEmail = user.email;
+    log('SOCKET_AUTH_SUCCESS', { socketId: socket.id, userId: user.id });
+    next();
+  } catch (err) {
+    log('SOCKET_AUTH_ERROR', { socketId: socket.id, error: err.message });
+    return next(new Error('Authentication error'));
+  }
 });
 
 const PORT = process.env.PORT || 3001;
@@ -93,6 +123,114 @@ function generateRoomCode() {
   return code;
 }
 
+// Authoritative Server-side Match Result & Rating Recording to Supabase
+async function recordServerMatchResult(room, winnerIndex, winReason) {
+  if (!room || room.hasRecordedResult) return;
+  room.hasRecordedResult = true;
+
+  // Only record real human-vs-human ranked matches with 2 players
+  if (!room.isRanked || !Array.isArray(room.players) || room.players.length !== 2) {
+    return;
+  }
+
+  const p0 = room.players[0];
+  const p1 = room.players[1];
+
+  if (!p0?.userId || !p1?.userId || p0.userId === p1.userId) {
+    log('MATCH_RECORD_SKIPPED', { roomCode: room.code, reason: 'Invalid or identical player user IDs' });
+    return;
+  }
+
+  try {
+    // Fetch both player profiles from Supabase
+    const { data: dbPlayers, error: fetchErr } = await supabaseAdmin
+      .from('players')
+      .select('*')
+      .in('id', [p0.userId, p1.userId]);
+
+    if (fetchErr || !dbPlayers || dbPlayers.length < 2) {
+      log('MATCH_RECORD_ERROR', { roomCode: room.code, error: fetchErr?.message || 'Players not found in DB' });
+      return;
+    }
+
+    const p0Db = dbPlayers.find((p) => p.id === p0.userId);
+    const p1Db = dbPlayers.find((p) => p.id === p1.userId);
+
+    if (!p0Db || !p1Db) {
+      log('MATCH_RECORD_ERROR', { roomCode: room.code, error: 'Could not resolve both player rows' });
+      return;
+    }
+
+    const r0 = p0Db.rating || 400;
+    const r1 = p1Db.rating || 400;
+
+    const isP0Winner = winnerIndex === 0;
+    const isP1Winner = winnerIndex === 1;
+    const isDraw = winnerIndex === null || winnerIndex === undefined;
+
+    const score0 = isP0Winner ? 1 : isP1Winner ? 0 : 0.5;
+    const score1 = 1 - score0;
+
+    // Standard competitive Elo formula (K-factor = 32)
+    const expected0 = 1 / (1 + Math.pow(10, (r1 - r0) / 400));
+    const expected1 = 1 / (1 + Math.pow(10, (r0 - r1) / 400));
+
+    const change0 = Math.round(32 * (score0 - expected0));
+    const change1 = Math.round(32 * (score1 - expected1));
+
+    const newR0 = Math.max(100, r0 + change0);
+    const newR1 = Math.max(100, r1 + change1);
+
+    const p0Update = {
+      rating: newR0,
+      peak_rating: Math.max(p0Db.peak_rating || newR0, newR0),
+      wins: (p0Db.wins || 0) + (isP0Winner ? 1 : 0),
+      losses: (p0Db.losses || 0) + (isP1Winner ? 1 : 0),
+      draws: (p0Db.draws || 0) + (isDraw ? 1 : 0),
+      games_played: (p0Db.games_played || 0) + 1,
+      updated_at: new Date().toISOString(),
+    };
+
+    const p1Update = {
+      rating: newR1,
+      peak_rating: Math.max(p1Db.peak_rating || newR1, newR1),
+      wins: (p1Db.wins || 0) + (isP1Winner ? 1 : 0),
+      losses: (p1Db.losses || 0) + (isP0Winner ? 1 : 0),
+      draws: (p1Db.draws || 0) + (isDraw ? 1 : 0),
+      games_played: (p1Db.games_played || 0) + 1,
+      updated_at: new Date().toISOString(),
+    };
+
+    const [res0, res1] = await Promise.all([
+      supabaseAdmin.from('players').update(p0Update).eq('id', p0.userId),
+      supabaseAdmin.from('players').update(p1Update).eq('id', p1.userId),
+    ]);
+
+    if (res0.error || res1.error) {
+      log('MATCH_UPDATE_DB_ERROR', { error0: res0.error?.message, error1: res1.error?.message });
+    } else {
+      log('MATCH_RESULT_RECORDED_SUPABASE', {
+        roomCode: room.code,
+        winnerIndex,
+        p0: { userId: p0.userId, oldRating: r0, newRating: newR0, change: change0 },
+        p1: { userId: p1.userId, oldRating: r1, newRating: newR1, change: change1 },
+      });
+
+      // Broadcast authoritative match outcome to room participants
+      io.to(room.code).emit('game:match_recorded', {
+        winnerIndex,
+        winReason,
+        results: {
+          [p0.userId]: { rating: newR0, change: change0 },
+          [p1.userId]: { rating: newR1, change: change1 },
+        },
+      });
+    }
+  } catch (err) {
+    log('MATCH_RECORD_EXCEPTION', { error: err.message, stack: err.stack });
+  }
+}
+
 // Server-side Clock Interval
 setInterval(() => {
   const now = Date.now();
@@ -123,6 +261,7 @@ setInterval(() => {
                 winReason: room.gameState.winReason,
                 mode: room.mode,
               });
+              recordServerMatchResult(room, room.gameState.winner, room.gameState.winReason);
             }
 
             io.to(code).emit('game:state_update', room.gameState);
@@ -250,7 +389,8 @@ io.on('connection', (socket) => {
         lastTurnTime: now,
         endedAt: null,
         allDisconnectedAt: null,
-        players: [{ socketId: socket.id, playerIndex: 0, name: cleanPlayerName }],
+        isRanked: false,
+        players: [{ socketId: socket.id, userId: socket.userId, playerIndex: 0, name: cleanPlayerName }],
         spectators: [],
         rematchRequests: new Set(),
       };
@@ -261,6 +401,7 @@ io.on('connection', (socket) => {
       log('ROOM_CREATED', {
         roomCode: code,
         hostId: socket.id,
+        userId: socket.userId,
         mode,
         timeControlKey,
         playerName: cleanPlayerName,
@@ -314,10 +455,21 @@ io.on('connection', (socket) => {
         assignedIndex = existing.playerIndex;
       } else if (room.players.length < maxPlayers) {
         assignedIndex = room.players.length;
-        room.players.push({ socketId: socket.id, playerIndex: assignedIndex, name: cleanPlayerName });
+        room.players.push({ socketId: socket.id, userId: socket.userId, playerIndex: assignedIndex, name: cleanPlayerName });
         room.gameState.players[assignedIndex].name = cleanPlayerName;
+
+        // If 2 distinct authenticated human players in standard 2P mode, mark room as ranked
+        if (
+          room.players.length === 2 &&
+          room.players[0].userId &&
+          room.players[1].userId &&
+          room.players[0].userId !== room.players[1].userId &&
+          room.mode !== MODES.QUAD
+        ) {
+          room.isRanked = true;
+        }
       } else {
-        room.spectators.push({ socketId: socket.id, name: cleanPlayerName });
+        room.spectators.push({ socketId: socket.id, userId: socket.userId, name: cleanPlayerName });
       }
 
       room.lastActivity = Date.now();
@@ -401,6 +553,7 @@ io.on('connection', (socket) => {
           winReason: room.gameState.winReason,
           mode: room.mode,
         });
+        recordServerMatchResult(room, room.gameState.winner, room.gameState.winReason);
       }
 
       // Broadcast updated state to all participants in room
@@ -436,6 +589,7 @@ io.on('connection', (socket) => {
           winReason: room.gameState.winReason,
           mode: room.mode,
         });
+        recordServerMatchResult(room, room.gameState.winner, room.gameState.winReason);
       }
       room.lastActivity = now;
 
@@ -474,6 +628,7 @@ io.on('connection', (socket) => {
       room.gameState.winner = null;
       room.gameState.winReason = 'Game drawn by mutual agreement.';
       room.endedAt = Date.now();
+      recordServerMatchResult(room, null, room.gameState.winReason);
 
       io.to(code).emit('game:state_update', room.gameState);
       io.to(code).emit('game:draw_accepted');
@@ -614,9 +769,10 @@ io.on('connection', (socket) => {
           lastTurnTime: now,
           endedAt: null,
           allDisconnectedAt: null,
+          isRanked: true,
           players: [
-            { socketId: waitingOpponent.socketId, playerIndex: 0, name: cleanP1Name },
-            { socketId: socket.id, playerIndex: 1, name: cleanPlayerName },
+            { socketId: waitingOpponent.socketId, userId: waitingOpponent.userId, playerIndex: 0, name: cleanP1Name },
+            { socketId: socket.id, userId: socket.userId, playerIndex: 1, name: cleanPlayerName },
           ],
           spectators: [],
           rematchRequests: new Set(),
@@ -708,6 +864,7 @@ io.on('connection', (socket) => {
 
       matchmakingQueue.push({
         socketId: socket.id,
+        userId: socket.userId,
         mode,
         timeControlKey,
         boardSize,
@@ -762,6 +919,7 @@ io.on('connection', (socket) => {
             );
             room.gameState = updatedState;
             room.endedAt = Date.now();
+            recordServerMatchResult(room, room.gameState.winner, room.gameState.winReason);
             io.to(code).emit('game:state_update', room.gameState);
             log('PLAYER_FORFEIT_DISCONNECT', {
               roomCode: code,
@@ -796,6 +954,95 @@ app.get('/api/health', (req, res) => {
     totalRooms: rooms.size,
     timestamp: new Date().toISOString(),
   });
+});
+
+// Real Top 100 Leaderboard REST endpoint
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const { data: players, error } = await supabaseAdmin
+      .from('players')
+      .select('id, display_name, avatar, country, rating, wins, losses, draws, games_played')
+      .order('rating', { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+    res.json({ success: true, players: players || [] });
+  } catch (err) {
+    log('ERROR', { event: 'api:leaderboard', error: err.message });
+    res.status(500).json({ success: false, error: 'Failed to fetch leaderboard' });
+  }
+});
+
+// One-time legacy profile migration endpoint for fresh accounts
+app.post('/api/profile/migrate', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+    if (authErr || !user) {
+      return res.status(401).json({ success: false, error: 'Invalid auth token' });
+    }
+
+    const { data: playerRow, error: fetchErr } = await supabaseAdmin
+      .from('players')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (fetchErr || !playerRow) {
+      return res.status(404).json({ success: false, error: 'Player profile not found' });
+    }
+
+    // Only allow migration if row is at fresh defaults
+    const isFresh =
+      playerRow.rating === 400 &&
+      (playerRow.games_played || 0) === 0 &&
+      (playerRow.wins || 0) === 0 &&
+      (playerRow.losses || 0) === 0;
+
+    if (!isFresh) {
+      return res.json({ success: true, message: 'Profile already established, migration skipped', profile: playerRow });
+    }
+
+    const { rating, wins, losses, draws, displayName, avatar, country } = req.body;
+
+    const updatePayload = {
+      rating: typeof rating === 'number' ? rating : 400,
+      peak_rating: typeof rating === 'number' ? rating : 400,
+      wins: typeof wins === 'number' ? wins : 0,
+      losses: typeof losses === 'number' ? losses : 0,
+      draws: typeof draws === 'number' ? draws : 0,
+      games_played: (wins || 0) + (losses || 0) + (draws || 0),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (displayName && typeof displayName === 'string') {
+      const cleanName = displayName.replace(/[<>{}[\]\\\/]/g, '').trim().slice(0, 20);
+      if (cleanName.length >= 2) {
+        updatePayload.display_name = cleanName;
+      }
+    }
+    if (avatar) updatePayload.avatar = avatar;
+    if (country) updatePayload.country = country;
+
+    const { data: updated, error: updateErr } = await supabaseAdmin
+      .from('players')
+      .update(updatePayload)
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    log('PROFILE_MIGRATED', { userId: user.id, rating: updated.rating, games: updated.games_played });
+    res.json({ success: true, profile: updated });
+  } catch (err) {
+    log('ERROR', { event: 'api:profile_migrate', error: err.message });
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Catch-all route to serve index.html for client-side routing
