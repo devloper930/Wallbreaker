@@ -53,11 +53,8 @@ export default function LeaderboardModal({
               <Trophy className="w-5 h-5 fill-slate-900" />
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-white tracking-wide flex items-center gap-2">
-                <span>Top 100 Global Rankings</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold">
-                  Play Online Elo
-                </span>
+              <h2 className="text-base font-extrabold text-white tracking-wide">
+                Top 100 Global Rankings
               </h2>
               <p className="text-xs text-[#9e9c98]">Rankings updated dynamically from competitive matches</p>
             </div>

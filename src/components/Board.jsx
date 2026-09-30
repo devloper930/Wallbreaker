@@ -68,7 +68,11 @@ export default function Board({
   };
 
   // Check wall legality on hover
-  const handleWallHover = (r, c, overrideOrientation = null) => {
+  const handleWallHover = (r, c, overrideOrientation = null, isDirectBoardTouch = false) => {
+    // On mobile devices, direct groove hover is disabled; only drag-and-drop shows preview
+    if (isDirectBoardTouch && (typeof window !== 'undefined' && (window.innerWidth < 768 || window.matchMedia('(pointer: coarse)').matches))) {
+      return;
+    }
     if (!isMyTurn || gameState.status !== 'playing' || currentPlayer.wallsLeft <= 0) {
       setHoveredWall(null);
       return;
@@ -86,7 +90,12 @@ export default function Board({
   };
 
   // Place wall
-  const handleWallClick = (r, c, overrideOrientation = null) => {
+  const handleWallClick = (r, c, overrideOrientation = null, isDirectBoardTouch = false) => {
+    // On mobile screens, direct board touch/tap to create walls is disabled.
+    // The player drags and drops walls from their player card dock onto the board.
+    if (isDirectBoardTouch && (typeof window !== 'undefined' && (window.innerWidth < 768 || window.matchMedia('(pointer: coarse)').matches))) {
+      return;
+    }
     if (!isMyTurn || gameState.status !== 'playing') return;
     if (currentPlayer.wallsLeft <= 0) {
       soundManager.playIllegal();
@@ -480,10 +489,22 @@ export default function Board({
                     backgroundColor: wallPlayerStyle.color,
                     backgroundImage: wallPlayerStyle.wallGradientH,
                     borderColor: wallPlayerStyle.wallBorder,
-                    boxShadow: `0 4px 8px rgba(0, 0, 0, 0.6), 0 0 12px ${wallPlayerStyle.wallGlow}`,
+                    boxShadow: `0 5px 12px rgba(0, 0, 0, 0.75), 0 0 16px ${wallPlayerStyle.wallGlow}`,
                   }}
-                  className="z-20 rounded-sm wall-3d-h border wall-anim-slam pointer-events-none transition-all"
-                />
+                  className="z-20 rounded-[4px] wall-3d-h border wall-anim-slam pointer-events-none transition-all relative overflow-hidden"
+                >
+                  {/* Specular Top Chamfer Highlight */}
+                  <div className="absolute inset-x-0 top-0 h-[40%] bg-gradient-to-b from-white/50 via-white/10 to-transparent pointer-events-none rounded-t-[3px]" />
+                  {/* Subtle Bottom Ambient Shadow */}
+                  <div className="absolute inset-x-0 bottom-0 h-[30%] bg-black/45 pointer-events-none rounded-b-[3px]" />
+                  {/* Left & Right End Caps */}
+                  <div className="absolute inset-y-0 left-0 w-1 bg-white/35 pointer-events-none rounded-l-[3px]" />
+                  <div className="absolute inset-y-0 right-0 w-1 bg-black/50 pointer-events-none rounded-r-[3px]" />
+                  {/* Center Intersection Rivet / Fastener Pin */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-[80%] rounded-[2px] bg-black/50 border-x border-white/40 pointer-events-none flex items-center justify-center shadow-inner">
+                    <div className="w-1 h-1 rounded-full bg-white/80 shadow-xs" />
+                  </div>
+                </div>
               );
             } else {
               const startRow = visualR * 2 + 1;
@@ -498,10 +519,22 @@ export default function Board({
                     backgroundColor: wallPlayerStyle.color,
                     backgroundImage: wallPlayerStyle.wallGradientV,
                     borderColor: wallPlayerStyle.wallBorder,
-                    boxShadow: `3px 3px 8px rgba(0, 0, 0, 0.6), 0 0 12px ${wallPlayerStyle.wallGlow}`,
+                    boxShadow: `5px 0 12px rgba(0, 0, 0, 0.75), 0 0 16px ${wallPlayerStyle.wallGlow}`,
                   }}
-                  className="z-20 rounded-sm wall-3d-v border wall-anim-slam pointer-events-none transition-all"
-                />
+                  className="z-20 rounded-[4px] wall-3d-v border wall-anim-slam pointer-events-none transition-all relative overflow-hidden"
+                >
+                  {/* Specular Left Chamfer Highlight */}
+                  <div className="absolute inset-y-0 left-0 w-[40%] bg-gradient-to-r from-white/50 via-white/10 to-transparent pointer-events-none rounded-l-[3px]" />
+                  {/* Subtle Right Ambient Shadow */}
+                  <div className="absolute inset-y-0 right-0 w-[30%] bg-black/45 pointer-events-none rounded-r-[3px]" />
+                  {/* Top & Bottom End Caps */}
+                  <div className="absolute inset-x-0 top-0 h-1 bg-white/35 pointer-events-none rounded-t-[3px]" />
+                  <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50 pointer-events-none rounded-b-[3px]" />
+                  {/* Center Intersection Rivet / Fastener Pin */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-2.5 w-[80%] rounded-[2px] bg-black/50 border-y border-white/40 pointer-events-none flex items-center justify-center shadow-inner">
+                    <div className="w-1 h-1 rounded-full bg-white/80 shadow-xs" />
+                  </div>
+                </div>
               );
             }
           })}
@@ -522,14 +555,17 @@ export default function Board({
                       gridRow: `${startRow} / span 1`,
                       gridColumn: `${startCol} / span 3`,
                       backgroundImage: hoveredWall.isValid ? currentPStyle.wallGradientH : undefined,
-                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.88)',
+                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.9)',
                       borderColor: hoveredWall.isValid ? '#ffffff' : '#fca5a5',
                       boxShadow: hoveredWall.isValid
-                        ? `0 0 18px ${currentPStyle.wallGlow}, 0 0 8px #ffffff`
-                        : '0 0 16px rgba(239, 68, 68, 0.95)',
+                        ? `0 0 22px ${currentPStyle.wallGlow}, 0 0 10px #ffffff`
+                        : '0 0 20px rgba(239, 68, 68, 0.95)',
                     }}
-                    className="z-30 rounded-sm wall-3d-h pointer-events-none transition-all duration-75 border-2 animate-pulse"
-                  />
+                    className="z-30 rounded-[4px] wall-3d-h pointer-events-none transition-all duration-75 border-2 animate-pulse relative overflow-hidden"
+                  >
+                    <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/60 to-transparent pointer-events-none" />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-[80%] rounded-[2px] bg-black/35 border-x border-white/60 pointer-events-none" />
+                  </div>
                 );
               } else {
                 const startRow = visualR * 2 + 1;
@@ -541,20 +577,23 @@ export default function Board({
                       gridRow: `${startRow} / span 3`,
                       gridColumn: `${startCol} / span 1`,
                       backgroundImage: hoveredWall.isValid ? currentPStyle.wallGradientV : undefined,
-                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.88)',
+                      backgroundColor: hoveredWall.isValid ? currentPStyle.color : 'rgba(239, 68, 68, 0.9)',
                       borderColor: hoveredWall.isValid ? '#ffffff' : '#fca5a5',
                       boxShadow: hoveredWall.isValid
-                        ? `0 0 18px ${currentPStyle.wallGlow}, 0 0 8px #ffffff`
-                        : '0 0 16px rgba(239, 68, 68, 0.95)',
+                        ? `0 0 22px ${currentPStyle.wallGlow}, 0 0 10px #ffffff`
+                        : '0 0 20px rgba(239, 68, 68, 0.95)',
                     }}
-                    className="z-30 rounded-sm wall-3d-v pointer-events-none transition-all duration-75 border-2 animate-pulse"
-                  />
+                    className="z-30 rounded-[4px] wall-3d-v pointer-events-none transition-all duration-75 border-2 animate-pulse relative overflow-hidden"
+                  >
+                    <div className="absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-white/60 to-transparent pointer-events-none" />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-2.5 w-[80%] rounded-[2px] bg-black/35 border-y border-white/60 pointer-events-none" />
+                  </div>
                 );
               }
             })()
           )}
 
-          {/* 4a. Interactive Horizontal Grooves (between cells vertically, with generous touch areas) */}
+          {/* 4a. Interactive Horizontal Grooves (Mobile: pointer-events-none; Desktop: interactive click/hover) */}
           {Array.from({ length: boardSize - 1 }, (_, vR) =>
             Array.from({ length: boardSize }, (_, vC) => {
               const gridRow = vR * 2 + 2;
@@ -570,17 +609,17 @@ export default function Board({
                     gridRow: `${gridRow} / span 1`,
                     gridColumn: `${gridCol} / span 1`,
                   }}
-                  className="relative group z-10 cursor-pointer touch-none before:absolute before:inset-0 sm:before:-inset-y-0.5 before:z-10"
-                  onMouseEnter={() => handleWallHover(r, c, 'h')}
-                  onClick={() => handleWallClick(r, c, 'h')}
+                  className="relative group z-10 sm:cursor-pointer touch-none pointer-events-none sm:pointer-events-auto before:absolute before:inset-0 sm:before:-inset-y-0.5 before:z-10"
+                  onMouseEnter={() => handleWallHover(r, c, 'h', true)}
+                  onClick={() => handleWallClick(r, c, 'h', true)}
                 >
-                  <div className="w-full h-full bg-transparent group-hover:bg-amber-400/40 transition-colors rounded-sm" />
+                  <div className="w-full h-full bg-transparent sm:group-hover:bg-amber-400/40 transition-colors rounded-sm" />
                 </div>
               );
             })
           )}
 
-          {/* 4b. Interactive Vertical Grooves (between cells horizontally, with generous touch areas) */}
+          {/* 4b. Interactive Vertical Grooves (Mobile: pointer-events-none; Desktop: interactive click/hover) */}
           {Array.from({ length: boardSize }, (_, vR) =>
             Array.from({ length: boardSize - 1 }, (_, vC) => {
               const gridRow = vR * 2 + 1;
@@ -596,17 +635,17 @@ export default function Board({
                     gridRow: `${gridRow} / span 1`,
                     gridColumn: `${gridCol} / span 1`,
                   }}
-                  className="relative group z-10 cursor-pointer touch-none before:absolute before:inset-0 sm:before:-inset-x-0.5 before:z-10"
-                  onMouseEnter={() => handleWallHover(r, c, 'v')}
-                  onClick={() => handleWallClick(r, c, 'v')}
+                  className="relative group z-10 sm:cursor-pointer touch-none pointer-events-none sm:pointer-events-auto before:absolute before:inset-0 sm:before:-inset-x-0.5 before:z-10"
+                  onMouseEnter={() => handleWallHover(r, c, 'v', true)}
+                  onClick={() => handleWallClick(r, c, 'v', true)}
                 >
-                  <div className="w-full h-full bg-transparent group-hover:bg-cyan-400/40 transition-colors rounded-sm" />
+                  <div className="w-full h-full bg-transparent sm:group-hover:bg-cyan-400/40 transition-colors rounded-sm" />
                 </div>
               );
             })
           )}
 
-          {/* 4c. Interactive Intersections (with generous touch areas) */}
+          {/* 4c. Interactive Intersections (Mobile: pointer-events-none; Desktop: interactive click/hover) */}
           {Array.from({ length: boardSize - 1 }, (_, vR) =>
             Array.from({ length: boardSize - 1 }, (_, vC) => {
               const gridRow = vR * 2 + 2;
@@ -621,11 +660,11 @@ export default function Board({
                     gridRow: `${gridRow} / span 1`,
                     gridColumn: `${gridCol} / span 1`,
                   }}
-                  className="relative group z-10 cursor-pointer touch-none before:absolute before:inset-0 sm:before:-inset-0.5 before:z-10"
-                  onMouseEnter={() => handleWallHover(r, c)}
-                  onClick={() => handleWallClick(r, c)}
+                  className="relative group z-10 sm:cursor-pointer touch-none pointer-events-none sm:pointer-events-auto before:absolute before:inset-0 sm:before:-inset-0.5 before:z-10"
+                  onMouseEnter={() => handleWallHover(r, c, null, true)}
+                  onClick={() => handleWallClick(r, c, null, true)}
                 >
-                  <div className="w-full h-full rounded-full bg-white/0 group-hover:bg-white/60 transition-colors" />
+                  <div className="w-full h-full rounded-full bg-white/0 sm:group-hover:bg-white/60 transition-colors" />
                 </div>
               );
             })
@@ -646,17 +685,29 @@ export default function Board({
           }}
         >
           <div
-            className={`rounded shadow-2xl border-2 border-white ${
-              touchGhost.orientation === 'h' ? 'w-20 h-4 wall-3d-h' : 'w-4 h-20 wall-3d-v'
+            className={`rounded-[4px] shadow-2xl border-2 border-white relative overflow-hidden ${
+              touchGhost.orientation === 'h' ? 'w-24 h-5 wall-3d-h' : 'w-5 h-24 wall-3d-v'
             }`}
             style={{
               backgroundColor: getPlayerStyle(currentPlayerIdx, pieceTheme).color,
               backgroundImage: touchGhost.orientation === 'h'
                 ? getPlayerStyle(currentPlayerIdx, pieceTheme).wallGradientH
                 : getPlayerStyle(currentPlayerIdx, pieceTheme).wallGradientV,
-              boxShadow: `0 0 24px ${getPlayerStyle(currentPlayerIdx, pieceTheme).wallGlow}, 0 6px 16px rgba(0, 0, 0, 0.7)`,
+              boxShadow: `0 0 28px ${getPlayerStyle(currentPlayerIdx, pieceTheme).wallGlow}, 0 8px 18px rgba(0, 0, 0, 0.85)`,
             }}
-          />
+          >
+            {touchGhost.orientation === 'h' ? (
+              <>
+                <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/60 to-transparent pointer-events-none" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-[80%] rounded-[2px] bg-black/45 border-x border-white/60 pointer-events-none" />
+              </>
+            ) : (
+              <>
+                <div className="absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-white/60 to-transparent pointer-events-none" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-2.5 w-[80%] rounded-[2px] bg-black/45 border-y border-white/60 pointer-events-none" />
+              </>
+            )}
+          </div>
         </div>
       )}
 

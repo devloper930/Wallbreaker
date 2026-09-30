@@ -230,16 +230,21 @@ export default function PlayerCard({
                   <Shield className="w-3.5 h-3.5" />
                   {wallsCount}
                 </span>
-                <div className="hidden sm:flex items-center gap-0.5">
+                <div className="hidden sm:flex items-center gap-1">
                   {wallSlots.map((hasWall, idx) => (
                     <div
                       key={idx}
-                      className="w-1.5 h-3 rounded-[1px] transition-colors"
+                      className="w-1.5 h-3.5 rounded-[2px] transition-colors relative overflow-hidden"
                       style={{
                         backgroundColor: hasWall ? playerStyle.color : '#3c3934',
-                        boxShadow: hasWall ? `0 0 3px ${playerStyle.wallGlow}` : undefined,
+                        backgroundImage: hasWall ? playerStyle.wallGradientV : undefined,
+                        boxShadow: hasWall ? `0 1px 4px rgba(0,0,0,0.6), 0 0 5px ${playerStyle.wallGlow}` : undefined,
                       }}
-                    />
+                    >
+                      {hasWall && (
+                        <div className="absolute inset-x-0 top-0 h-[45%] bg-white/45 pointer-events-none" />
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -255,12 +260,13 @@ export default function PlayerCard({
         {/* Center: Two Sleek Circular Wall Buttons (Horizontal & Vertical) */}
         {showWallButtons && wallsCount > 0 && (
           <div
-            className={`flex items-center gap-1 sm:gap-2 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-2xl bg-[#1b1a17]/90 border border-[#3c3934] shadow-inner transition-all duration-150 ${
-              isActive && isMyTurn ? 'opacity-100 ring-1 ring-white/10' : 'opacity-40 pointer-events-none'
+            className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 rounded-2xl bg-[#1b1a17]/95 border border-[#3c3934] shadow-inner transition-all duration-150 relative ${
+              isActive && isMyTurn ? 'opacity-100 ring-1 ring-amber-400/30' : 'opacity-40 pointer-events-none'
             }`}
           >
-            <span className="hidden md:inline text-[9px] font-mono text-[#9e9c98] uppercase font-bold tracking-tight">
-              Walls:
+            {/* Drag wall guide tag */}
+            <span className="text-[8px] sm:text-[9px] font-mono uppercase font-black tracking-wider px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 select-none">
+              DRAG
             </span>
 
             {/* Circular Button 1: Horizontal Wall [ ── ] */}
@@ -273,28 +279,31 @@ export default function PlayerCard({
               onTouchEnd={handleWallTouchEnd}
               onTouchCancel={handleWallTouchEnd}
               onClick={() => onSelectWallOrientation && onSelectWallOrientation('h')}
-              title="Horizontal Wall [ ── ] (Drag onto board or tap to select)"
+              title="Drag onto board to place Horizontal Wall [ ── ]"
               className={`relative w-9 h-9 sm:w-11 sm:h-11 rounded-full flex flex-col items-center justify-center cursor-grab active:cursor-grabbing transition-all select-none touch-none ${
                 activeWallOrientation === 'h' && isActive
-                  ? 'scale-105 shadow-md'
+                  ? 'scale-105 shadow-lg ring-2 ring-white/30'
                   : 'hover:scale-105 hover:border-white/40'
               }`}
               style={{
                 touchAction: 'none',
                 backgroundColor: activeWallOrientation === 'h' ? '#2b2926' : '#21201d',
                 border: `2px solid ${activeWallOrientation === 'h' && isActive ? playerStyle.color : '#3c3934'}`,
-                boxShadow: activeWallOrientation === 'h' && isActive ? `0 0 12px ${playerStyle.wallGlow}` : undefined,
+                boxShadow: activeWallOrientation === 'h' && isActive ? `0 0 16px ${playerStyle.wallGlow}, 0 4px 8px rgba(0,0,0,0.5)` : undefined,
               }}
             >
-              {/* Horizontal Wall Bar Icon */}
+              {/* Horizontal Wall Bar Icon with 3D Slab styling */}
               <div
-                className="w-5 sm:w-6 h-1.5 sm:h-2 rounded-[2px] shadow-sm transition-transform pointer-events-none"
+                className="w-5 sm:w-6 h-2 sm:h-2.5 rounded-[3px] wall-3d-h transition-transform pointer-events-none relative overflow-hidden"
                 style={{
                   backgroundImage: playerStyle.wallGradientH,
-                  border: `1px solid ${playerStyle.wallBorder}`,
+                  borderColor: playerStyle.wallBorder,
                 }}
-              />
-              <span className="text-[9px] sm:text-[10px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
+              >
+                <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/50 to-transparent pointer-events-none" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-[80%] bg-black/40 border-x border-white/40 pointer-events-none" />
+              </div>
+              <span className="text-[8px] sm:text-[9px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
                 ──
               </span>
             </div>
@@ -309,28 +318,31 @@ export default function PlayerCard({
               onTouchEnd={handleWallTouchEnd}
               onTouchCancel={handleWallTouchEnd}
               onClick={() => onSelectWallOrientation && onSelectWallOrientation('v')}
-              title="Vertical Wall [ │ ] (Drag onto board or tap to select)"
+              title="Drag onto board to place Vertical Wall [ │ ]"
               className={`relative w-9 h-9 sm:w-11 sm:h-11 rounded-full flex flex-col items-center justify-center cursor-grab active:cursor-grabbing transition-all select-none touch-none ${
                 activeWallOrientation === 'v' && isActive
-                  ? 'scale-105 shadow-md'
+                  ? 'scale-105 shadow-lg ring-2 ring-white/30'
                   : 'hover:scale-105 hover:border-white/40'
               }`}
               style={{
                 touchAction: 'none',
                 backgroundColor: activeWallOrientation === 'v' ? '#2b2926' : '#21201d',
                 border: `2px solid ${activeWallOrientation === 'v' && isActive ? playerStyle.color : '#3c3934'}`,
-                boxShadow: activeWallOrientation === 'v' && isActive ? `0 0 12px ${playerStyle.wallGlow}` : undefined,
+                boxShadow: activeWallOrientation === 'v' && isActive ? `0 0 16px ${playerStyle.wallGlow}, 0 4px 8px rgba(0,0,0,0.5)` : undefined,
               }}
             >
-              {/* Vertical Wall Bar Icon */}
+              {/* Vertical Wall Bar Icon with 3D Slab styling */}
               <div
-                className="w-1.5 sm:w-2 h-4 sm:h-6 rounded-[2px] shadow-sm transition-transform pointer-events-none"
+                className="w-2 sm:w-2.5 h-5 sm:h-6 rounded-[3px] wall-3d-v transition-transform pointer-events-none relative overflow-hidden"
                 style={{
                   backgroundImage: playerStyle.wallGradientV,
-                  border: `1px solid ${playerStyle.wallBorder}`,
+                  borderColor: playerStyle.wallBorder,
                 }}
-              />
-              <span className="text-[9px] sm:text-[10px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
+              >
+                <div className="absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-white/50 to-transparent pointer-events-none" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1.5 w-[80%] bg-black/40 border-y border-white/40 pointer-events-none" />
+              </div>
+              <span className="text-[8px] sm:text-[9px] font-mono font-bold text-white/90 leading-none mt-0.5 pointer-events-none">
                 │
               </span>
             </div>
